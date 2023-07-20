@@ -1,0 +1,11 @@
+100 10
+7 7
+F O O O O O O
+O L L L E O O
+L L O O O O O 
+L P O L L L O
+L O O L A W O
+P O E L S O O
+P W A L L O H
+
+

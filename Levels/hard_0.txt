@@ -1,0 +1,32 @@
+100 30
+30 30
+A P O O O E O P O P O L O P O O O O O O O H O O O O L A P O
+W P O O O P P O O P O L O O O L L L L L O O O O O O L L O O
+L L L L L L L L O O E L O O O L O O O L O O O O O O O O O O
+O O O O O E O O O E W L O O O L O A O L O O O E O E O O O O
+P A O O O L P O O O O L O O L L O O O L O O O O O O O O O O
+P O O H W L O O O O O L O O O L L O L L O L L L L L L L O O
+L L L L L L L L O O O L O O O O O O O O O O E O O O O O O O
+O O O O O O O L O O O L O O O E O O O O O O E O O O O O O O
+P O O O P P O L O E O L L L O O O L L L L O O O O O O O P O
+W O O A E E O L O O O O O O O O O L O O L O O O E P O O O O
+O O O O O O O L O O O O P O O O P L L O L O O O O O O O O O
+O O O P E O E L O O O O E O O O A O O E O O O L L L L L L O
+O O O O O E O O O O O O O O E O O O O O P L L L O O O O F O
+O E O O O O E L O O O O P O E L O O O O L L O O O L L L L O
+L L L L L L L L O L O O L L L L O O O O L O O L L L O O O O
+O O O O O E O O O L O E L O O L O O O O L E L L O L O P O O
+O O O O O E O O O L L O L S O L O O O O E E L O O L L O O O
+P O O O O L O O P O O O L L O L P P O O L E L O O L O O O O
+O O E L L L O O O O O O O O O O E O O O O O O O O L E E E O
+E O O L O L O O O O O O P L O O O O O E H L L L L L L O L O
+O E O L E L O O O O O O L L L O O O O O O O O O O O O O O O
+O P W L O L P O O W O O O L O O O O L O O O O O O E L L L O
+O L L L P L O O O O E O O L O O O O L O O O O P O O L O O O
+O O O L O L O O O O O O O L O P O O L O O O O O L L L O W O
+O O P L O L O O O O O O O O O O O O L O O O O O O O O O E O
+P O L L O O O O L L L O O O O O O O L O O E O O L L L L L O
+E E O O O O O O L O L O O O O O O O O O O O O O O O O O O O
+L O L O O O O O O O O O E O O O P O O A L L L L O O O W O O
+L P L O O O O O O E O O O O O W O O O O O O O O O O O O O O
+L L L O O O O O O E O O O O O O H O P O O O O P O O P O O O

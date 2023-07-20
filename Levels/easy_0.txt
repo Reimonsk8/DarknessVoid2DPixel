@@ -1,0 +1,12 @@
+100 10
+10 10
+F O O O O O O O O O
+O L L L E L L L L O
+L L O O E O O O L O
+L P O L L L O O L O
+L O O L A W O H L O
+P O E L S O O O L O
+P W A L L O H O E O
+O O O O O O O A L W
+L L O L L L L L L P
+W O O O O O O O O A
