@@ -28,12 +28,10 @@ void Helmet::pickHelmet(Helmet *current, Character &hero)
     temp.append(" found +maxHP: ");
     temp.append(QString::number(current->getMaxHP()));
     temp.append(" replace Helmet??\n");
-    mLogContent.prepend(temp);
-    mScrollLog->setText(mLogContent);
+    addStyledLogEntry(temp, false);
     if (gState == S_ActionToPickItem && gValueButton == B_Atack)
     {
-        mLogContent.prepend(temp);
-        mScrollLog->setText(" Helmet taken\n");
+        addStyledLogEntry(" Helmet taken\n", false);
 		hero.addToInventory(*current);
 		lvl.grid[hero.heroRow][hero.heroCol] = 'O';
         gState = S_Normal;

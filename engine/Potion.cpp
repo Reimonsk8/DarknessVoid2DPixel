@@ -31,12 +31,10 @@ void Potion::pickPotion(Potion *current, Character &hero)
         temp.append(" inventory full, replace Potion ?? \n");
 	else
         temp.append(" take Potion ?? \n");
-    mLogContent.prepend(temp);
-    mScrollLog->setText(mLogContent);
+    addStyledLogEntry(temp, false);
     if (gState == S_ActionToPickItem && gValueButton == B_Atack)
 	{
-        mLogContent.prepend(+"Potion taken \n");
-        mScrollLog->setText(mLogContent);
+        addStyledLogEntry("Potion taken \n", false);
 		hero.addToInventory(*current);
         lvl.grid[hero.heroRow][hero.heroCol] = 'O';
         gState = S_Normal;
@@ -48,8 +46,7 @@ void Potion::usePotion(Character &hero)
 {
 	if (hero.inventorySize() <= 3)// if no potions
 	{
-        mLogContent.prepend("so dumb, you forgot that you dont have any potions left\n");
-        mScrollLog->setText(mLogContent);
+        addStyledLogEntry("so dumb, you forgot that you dont have any potions left\n", false);
 	}
 	else
 	{
@@ -75,14 +72,12 @@ void Potion::usePotion(Character &hero)
             temp.append(QString::fromStdString(hero.selectItem(inputNum + 2).getName()));
             temp.append(" used!! hero hp now is ");
             temp.append(QString::number(hero.getHP()));
-            mLogContent.prepend(temp);
-            mScrollLog->setText(mLogContent);
+            addStyledLogEntry(temp, false);
             hero.removeFromInventory(inputNum + 2);
         }
         else
         {
-            mLogContent.prepend("that potion slot is empty\n");
-            mScrollLog->setText(mLogContent);
+            addStyledLogEntry("that potion slot is empty\n", false);
         }
     }
 };

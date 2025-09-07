@@ -14,6 +14,8 @@ public:
 
      void infoPlace(int y, int x);
     void spawnMap();
+    template<typename T>
+    void shuffleItems(std::vector<T>* vectorPtr);
 
     Enemy *returnEnemy(int heroRow, int heroCol);
     Weapon *returnWeapon(int heroRow, int heroCol);

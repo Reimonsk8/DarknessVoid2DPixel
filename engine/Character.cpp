@@ -85,8 +85,7 @@ void Character::addToInventory(Equipment item)
         temp.append("item: ");
         temp.append(QString::fromStdString(item.getName()));
         temp.append(" added to inventory \n");
-        mLogContent.prepend(temp);
-        mScrollLog->setText(mLogContent);
+        addStyledLogEntry(temp, false);
         SoundEngine::PlaySoundByName("item",1);
 		item.posX = OUT_OF_RANGE;
 		item.posY = OUT_OF_RANGE;
@@ -101,8 +100,7 @@ void Character::addToInventory(Equipment item)
         temp.append("item: ");
         temp.append(QString::fromStdString(item.getName()));
         temp.append(" added to inventory \n");
-        mLogContent.prepend(temp);
-        mScrollLog->setText(mLogContent);
+        addStyledLogEntry(temp, false);
         SoundEngine::PlaySoundByName("item", 1);
 		item.posX = OUT_OF_RANGE;
 		item.posY = OUT_OF_RANGE;
@@ -117,8 +115,7 @@ void Character::addToInventory(Equipment item)
         temp.append("item: ");
         temp.append(QString::fromStdString(item.getName()));
         temp.append(" added to inventory \n");
-        mLogContent.prepend(temp);
-        mScrollLog->setText(mLogContent);
+        addStyledLogEntry(temp, false);
         SoundEngine::PlaySoundByName("item", 1);
 		item.posX = OUT_OF_RANGE;
 		item.posY = OUT_OF_RANGE;
@@ -131,8 +128,7 @@ void Character::addToInventory(Equipment item)
         temp.append("item: ");
         temp.append(QString::fromStdString(item.getName()));
         temp.append(" added to inventory \n");
-        mLogContent.prepend(temp);
-        mScrollLog->setText(mLogContent);
+        addStyledLogEntry(temp, false);
         SoundEngine::PlaySoundByName("item", 1);
 		item.posX = OUT_OF_RANGE;
 		item.posY = OUT_OF_RANGE;
@@ -176,7 +172,7 @@ void Character::walk(short y, short x)
 	if (((heroRow + y) < gHeight) && ((heroCol + x) < gWidth) && ((heroRow + y) >= 0) && ((heroCol + x) >= 0))//if inside limits
 	{
         if (lvl.grid[heroRow+y][heroCol+x] != L_L){
-            SoundEngine::PlaySoundByName("step", 1);
+            SoundEngine::PlayFootstep(); // Enhanced footstep sound
 			heroRow = (heroRow + y);
 			heroCol = (heroCol + x);
 		}

@@ -96,8 +96,7 @@ bool GameManager::startMenu(Character &hero) // only one time call at the beggin
     std::string x(hero.getName());
     if((x.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ") != std::string::npos) || x.length()>20)
     {
-        mLogContent.prepend( "Error name not valid,\nplease input no more than 20 chars \n& no special characters only letters\n");
-        mScrollLog->setText(mLogContent);
+        addStyledLogEntry("Error name not valid,\nplease input no more than 20 chars \n& no special characters only letters\n", false);
         return false;
     }
 	/*beginning gear should be set to low stats*/
@@ -105,8 +104,7 @@ bool GameManager::startMenu(Character &hero) // only one time call at the beggin
     temp.append(" Hi ");
     temp.append(QString::fromStdString(hero.getName()));
     temp.append(" now begin your journey to safety, take this gear\n ");
-    mLogContent.prepend(temp);
-    mScrollLog->setText(mLogContent);
+    addStyledLogEntry(temp, false);
     hero.addToInventory(Helmet("hat", 0, 1, true));
     hero.addToInventory(Armor("cloth shirt", 0, 1, true));
     hero.addToInventory(Weapon("knife", 1, 0, true));
@@ -139,8 +137,7 @@ void GameManager::handleEvent(Character &hero, Generator &generated)
         if(gState == S_Normal && gValueButton == B_Inspect)
         {
             SoundEngine::PlaySoundByName("ok", 0.5);
-            mLogContent.prepend("enter inspect direction: (click button or press key)\n");
-            mScrollLog->setText(mLogContent);
+            addStyledLogEntry("enter inspect direction: (click button or press key)\n", false);
             gState = S_WaitForArrowKeys;
             return;
         }
@@ -178,8 +175,7 @@ void GameManager::handleEvent(Character &hero, Generator &generated)
             temp.append(QString::number(current->getAP()));
             temp.append(" Power, FIGHT begins!\n");
             temp.append("Your turn, select & enter action: (click button or press key)\n");
-            mLogContent.prepend(temp);
-            mScrollLog->setText(mLogContent);
+            addStyledLogEntry(temp, true);
             SoundEngine::PlaySoundByName("battle", 1);
             hero.setCurrentEnemy(current);// set hero current enemy
             gFlee = false; // battle on event flee set to false
@@ -196,8 +192,7 @@ void GameManager::handleEvent(Character &hero, Generator &generated)
                 gState = S_BattleOnPotionUsed;
                 QString temp;
                 temp.append("Your turn, select & enter action: (click button or press key)\n");
-                mLogContent.prepend(temp);
-                mScrollLog->setText(mLogContent);
+                addStyledLogEntry(temp, true);
             }
             if(gValueButton == B_Atack)// atack enemy
             {
@@ -205,13 +200,11 @@ void GameManager::handleEvent(Character &hero, Generator &generated)
             }
             else if(gValueButton == B_Flee)//flee option
             {
-                mLogContent.prepend("you try to flee\n");
-                mScrollLog->setText(mLogContent);
+                addStyledLogEntry("you try to flee\n", false);
                 if(hero.getCurrentEnemy()->tryFlee())
                 {
                     SoundEngine::PlaySoundByName("flee", 1);
-                    mLogContent.prepend("you fleed sucesfully from battle !!!\n" );
-                    mScrollLog->setText(mLogContent);
+                    addStyledLogEntry("you fleed sucesfully from battle !!!\n", false);
                     gState = S_Normal;
                     gFlee = true;
                 }
@@ -222,8 +215,7 @@ void GameManager::handleEvent(Character &hero, Generator &generated)
             {
                 QString temp;
                 temp.append(" Your turn, select & enter action: (click button or press key)\n");
-                mLogContent.prepend(temp);
-                mScrollLog->setText(mLogContent);
+                addStyledLogEntry(temp, true);
             }
            }
         }
@@ -233,8 +225,9 @@ void GameManager::handleEvent(Character &hero, Generator &generated)
 	{
         gState = S_ActionToPickItem;
 		Potion *current = generated.returnPotion(hero.heroRow, hero.heroCol);
-        if (current->getName().find("legendary") != std::string::npos){
+        if (current->getName().find("legendary") != std::string::npos && !current->legendarySoundPlayed){
            SoundEngine::PlaySoundByName("legend", 0.5);
+           current->legendarySoundPlayed = true;
         }
         Potion::pickPotion(current, hero);
 	}break;
@@ -243,8 +236,9 @@ void GameManager::handleEvent(Character &hero, Generator &generated)
 	{
         gState = S_ActionToPickItem;
 		Weapon *current = generated.returnWeapon(hero.heroRow, hero.heroCol);
-        if (current->getName().find("legendary") != std::string::npos){
+        if (current->getName().find("legendary") != std::string::npos && !current->legendarySoundPlayed){
            SoundEngine::PlaySoundByName("legend", 0.5);
+           current->legendarySoundPlayed = true;
         }
         Weapon::pickWeapon(current, hero);
 	}break;
@@ -254,8 +248,9 @@ void GameManager::handleEvent(Character &hero, Generator &generated)
 	{
         gState = S_ActionToPickItem;
 		Armor *current = generated.returnArmor(hero.heroRow, hero.heroCol);
-        if (current->getName().find("legendary") != std::string::npos){
+        if (current->getName().find("legendary") != std::string::npos && !current->legendarySoundPlayed){
             SoundEngine::PlaySoundByName("legend", 0.5);
+            current->legendarySoundPlayed = true;
         }
         Armor::pickArmor(current, hero);
 	}break;
@@ -265,8 +260,9 @@ void GameManager::handleEvent(Character &hero, Generator &generated)
     {
         gState = S_ActionToPickItem;
 		Helmet *current = generated.returnHelmet(hero.heroRow, hero.heroCol);
-        if (current->getName().find("legendary") != std::string::npos){
+        if (current->getName().find("legendary") != std::string::npos && !current->legendarySoundPlayed){
             SoundEngine::PlaySoundByName("legend", 0.5);
+            current->legendarySoundPlayed = true;
         }
         Helmet::pickHelmet(current, hero);
 	}break;

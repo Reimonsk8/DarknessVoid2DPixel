@@ -1,36 +1,57 @@
 ﻿#include <time.h>
 #include <vector>
-#include <algorithm>
 #include <iostream>
 #include "common.h"
 #include "Generator.h"
+#include <QVector>
+#include <QRandomGenerator>
+#include <QtDebug>
+
+template<typename T>
+void Generator::shuffleItems(std::vector<T>* items)
+{
+    int size = items->size();
+    for (int i = 0; i < size; ++i)
+    {
+        int j = rand() % (size - i) + i;
+        std::swap((*items)[i], (*items)[j]);
+    }
+}
 
 Generator::Generator()
     :enemies(0), weapons(0), helmets(0), armors(0), potions(0)
 {
 	srand(time(0));
 
-	for (int i = 0; i < 16; i++)
-		listEnemies.push_back(Enemy("skeleton", 10, 50, 6));//name,AP,maxHP, flee
-	for (int i = 0; i < 14; i++)
-		listEnemies.push_back(Enemy("ghost", 15, 100, 9));
-	for (int i = 0; i < 12; i++)
-		listEnemies.push_back(Enemy("demon", 26, 200, 6));
-	for (int i = 0; i < 10; i++)
-		listEnemies.push_back(Enemy("troll", 20, 300, 3));
-	for (int i = 0; i < 9; i++)
-		listEnemies.push_back(Enemy("centaur", 20, 150, 8));
-	for (int i = 0; i < 8; i++)
-		listEnemies.push_back(Enemy("bat", 7, 30, 10));
-	for (int i = 0; i < 7; i++)
-		listEnemies.push_back(Enemy("minotaur", 25, 200, 4));
-	for (int i = 0; i < 6; i++)
-		listEnemies.push_back(Enemy("gryphon", 35, 180, 9));
-	for (int i = 0; i < 4; i++)
-		listEnemies.push_back(Enemy("reaper", 50, 250, 9));
-	for (int i = 0; i < 2; i++)
-		listEnemies.push_back(Enemy("dragon", 100, 700, 10));
-	std::random_shuffle(listEnemies.begin(), listEnemies.end());
+    struct EnemyConfig {
+        const char* name;
+        int ap;
+        int maxHp;
+        int flee;
+        int population;
+    } enemyConfigs[] = {
+        {"skeleton", 10, 50, 6, 10},
+        {"ghost", 15, 100, 9, 10},
+        {"demon", 26, 200, 6, 5},
+        {"troll", 20, 300, 3, 4},  // 4%
+        {"centaur", 20, 150, 8, 6}, // 7%
+        {"bat", 7, 30, 10,10},    // 3%
+        {"minotaur", 25, 200, 4, 4}, // 5%
+        {"gryphon", 35, 180, 9, 4}, // 4%
+        {"reaper", 50, 250, 9, 2},  // 2%
+        {"dragon", 100, 700, 10, 1} // 1%
+    };
+    int enemyConfigsSize = sizeof(enemyConfigs) / sizeof(enemyConfigs[0]);
+    for (int enemyTypeIndex = 0; enemyTypeIndex < enemyConfigsSize; ++enemyTypeIndex)
+    {
+        for(int populationCount = 0; populationCount < enemyConfigs[enemyTypeIndex].population; ++populationCount)
+        {
+            listEnemies.push_back(Enemy(enemyConfigs[enemyTypeIndex].name,
+                                        enemyConfigs[enemyTypeIndex].ap,
+                                        enemyConfigs[enemyTypeIndex].maxHp,
+                                        enemyConfigs[enemyTypeIndex].flee));
+        }
+    }
 
 	for (int i = 0; i < 2; i++)//generate helms
 	{
@@ -44,8 +65,7 @@ Generator::Generator()
         listHelmets.push_back(Helmet("barbute helmet", 0, 8));
         listHelmets.push_back(Helmet("evil dark helm", -15, 55));
 
-	}
-	std::random_shuffle(listHelmets.begin(), listHelmets.end());
+    }
 
 	for (int i = 0; i < 2; i++)//generate armors
 	{
@@ -57,8 +77,7 @@ Generator::Generator()
         listArmors.push_back(Armor("brigadine armor", 0, 8));
         listArmors.push_back(Armor("dragon slayer set", 0, 10));
         listArmors.push_back(Armor("evil cursed armor", 100, -100));
-	}
-	std::random_shuffle(listArmors.begin(), listArmors.end());
+    }
 
 	for (int i = 0; i < 2; i++)//generate weapons
     {
@@ -73,16 +92,66 @@ Generator::Generator()
         listWeapons.push_back(Weapon("javelin", 8, 0));
         listWeapons.push_back(Weapon("claymore", 9, 0));
         listWeapons.push_back(Weapon("greatsword", 12, 0));
-	}
-    std::random_shuffle(listWeapons.begin(), listWeapons.end());
+    }
 
 	const int TOTAL_POTIONS = 50;
 	for (int i = 0; i < TOTAL_POTIONS; i++)//generate potions
         listPotions.push_back(Potion("health potion", 0, 14));
+
+    shuffleItems(&listEnemies);
+    shuffleItems(&listHelmets);
+    shuffleItems(&listArmors);
+    shuffleItems(&listWeapons);
+    shuffleItems(&listPotions);
 };
 
 Generator::~Generator()
-{};
+{
+    qDebug() << "Generator destructor called";
+    
+    // Try clearing vectors in reverse order and with more safety
+    qDebug() << "Clearing listPotions...";
+    try {
+        listPotions.clear();
+        qDebug() << "listPotions cleared";
+    } catch (...) {
+        qDebug() << "Exception clearing listPotions";
+    }
+    
+    qDebug() << "Clearing listArmors...";
+    try {
+        listArmors.clear();
+        qDebug() << "listArmors cleared";
+    } catch (...) {
+        qDebug() << "Exception clearing listArmors";
+    }
+    
+    qDebug() << "Clearing listHelmets...";
+    try {
+        listHelmets.clear();
+        qDebug() << "listHelmets cleared";
+    } catch (...) {
+        qDebug() << "Exception clearing listHelmets";
+    }
+    
+    qDebug() << "Clearing listWeapons...";
+    try {
+        listWeapons.clear();
+        qDebug() << "listWeapons cleared";
+    } catch (...) {
+        qDebug() << "Exception clearing listWeapons";
+    }
+    
+    qDebug() << "Clearing listEnemies...";
+    try {
+        listEnemies.clear();
+        qDebug() << "listEnemies cleared";
+    } catch (...) {
+        qDebug() << "Exception clearing listEnemies";
+    }
+    
+    qDebug() << "Generator destructor completed";
+};
 
 void Generator::infoPlace(int y, int x)//function to look info
 {
@@ -100,8 +169,7 @@ void Generator::infoPlace(int y, int x)//function to look info
                 temp.append(" power ");
                 temp.append(QString::number(listEnemies[i].getAP()));
                 temp.append("\n");
-                mLogContent.prepend(temp);
-                mScrollLog->setText(mLogContent);
+                addStyledLogEntry(temp, false);
 				return;
 			}
 		}
@@ -115,8 +183,7 @@ void Generator::infoPlace(int y, int x)//function to look info
                 temp.append(" +Max health points ");
                 temp.append(QString::number(listHelmets[i].getMaxHP()));
                 temp.append("\n");
-                mLogContent.prepend(temp);
-                mScrollLog->setText(mLogContent);
+                addStyledLogEntry(temp, false);
 				return;
 			}
 		}
@@ -130,8 +197,7 @@ void Generator::infoPlace(int y, int x)//function to look info
                 temp.append(" +Max health points ");
                 temp.append(QString::number(listArmors[i].getMaxHP()));
                 temp.append("\n");
-                mLogContent.prepend(temp);
-                mScrollLog->setText(mLogContent);
+                addStyledLogEntry(temp, false);
 				return;
 			}
 		}
@@ -144,9 +210,8 @@ void Generator::infoPlace(int y, int x)//function to look info
                 temp.append(QString::fromStdString(listWeapons[i].getName()));
                 temp.append(" +Atack power ");
                 temp.append(QString::number(listWeapons[i].getAP()));
-                mLogContent.prepend(temp);
                 temp.append("\n");
-                mScrollLog->setText(mLogContent);
+                addStyledLogEntry(temp, false);
 				return;
 			}
 		}
@@ -160,14 +225,12 @@ void Generator::infoPlace(int y, int x)//function to look info
                 temp.append(" +Health points ");
                 temp.append(QString::number(listPotions[i].getMaxHP()));
                 temp.append("\n");
-                mLogContent.prepend(temp);
-                mScrollLog->setText(mLogContent);
+                addStyledLogEntry(temp, false);
 				return;
 			}
 		}
 	}
-    mLogContent.prepend("Theres nothing to look\n");
-    mScrollLog->setText(mLogContent);
+    addStyledLogEntry("Theres nothing to look\n", false);
 	return;
 }
 

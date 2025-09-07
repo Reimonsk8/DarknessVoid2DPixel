@@ -26,13 +26,11 @@ void Weapon::pickWeapon(Weapon *current, Character &hero)
     temp.append(" found +maxAP: ");
     temp.append(QString::number(current->getAP()));
     temp.append(" replace Weapon??\n");
-    mLogContent.prepend(temp);
-    mScrollLog->setText(mLogContent);
+    addStyledLogEntry(temp, false);
 
     if (gState == S_ActionToPickItem && gValueButton == B_Atack)
 	{
-        mLogContent.prepend("Weapon taken\n");
-        mScrollLog->setText(mLogContent);
+        addStyledLogEntry("Weapon taken\n", false);
 		hero.addToInventory(*current);
         lvl.grid[hero.heroRow][hero.heroCol] = 'O';
         gState = S_Normal;

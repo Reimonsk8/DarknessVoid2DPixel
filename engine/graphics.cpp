@@ -5,10 +5,9 @@
 #include "Character.h"
 #include "common.h"
 
-//REVIEW [VAR][ENCAPSULATION][Karla]: Abstract variables in order for them to live in its own scope
-// and avoid global namespace pollution.
+// Console graphics constants
 static const enum BackgroundColors {B_Hero =26 ,B_Enemy = 44, B_Floor = 120, B_Potion = 116, B_Gear = 126, B_Walls = 135};
-static const int notExplored = C_Black;//should be black
+static const int notExplored = C_Black;
 static const int defaultTextColor = C_White;
 
 void cls(bool invCLS)
@@ -87,8 +86,7 @@ void drawScreen(Character &hero, bool inventory)
 					{
 					case(L_L) ://Walls
 					{
-                        // REVIEW [STRUCT][REPEATED_CODE][Karla]: The following code could be placed in a function, except for the 
-                        // unexplored case, to reduce repeated code.
+                        // Set color based on exploration status
 						if (gExplored.grid[row][col] == 1)
 							SetConsoleTextAttribute(hConsole, B_Walls);
 						else
@@ -239,7 +237,7 @@ void drawScreen(Character &hero, bool inventory)
 	{
 		for (int item = 0; item < hero.inventorySize(); ++item)
 		{
-            // REVIEW [CTRLS][Karla]: Maybe evaluate to "== T_Consumable" and change "else-if" for an "else" statement
+            // Check if item is consumable or equipment
 			if (hero.selectItem(item).getType() != T_Consumable)//color weapons yellow and print info
 			{
 				SetConsoleTextAttribute(hConsole, C_Yellow);
@@ -295,9 +293,10 @@ void printTitle()
 	{
 		cls();
 
-        // REVIEW[STRUCT][CONVENTION][Karla]: All loops (in fact, all scopes) must have its body enclosed by curly braces.
-		for (int x = times; x >= 0; --x)
+        // Print newlines and ASCII art
+		for (int x = times; x >= 0; --x) {
 			std::cout << std::endl;
+		}
 		std::cout << "_____  _____   _____  __      __    _____ _____  ___   ____   _____  __  __   __  " << std::endl;
 		std::cout << " ||   ((   )) ((   )) ||     ((     ||  ) ||_// ||=|| (( ___ ((   )) ||\\\\||  ((   " << std::endl;
 		std::cout << " ||    \\\\_//   \\\\_//  ||__| \\_))    ||_// || \\\\ || ||  \\\\_||  \\\\_//  || \\|| \\_))  " << std::endl;

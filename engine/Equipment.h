@@ -20,17 +20,18 @@ public:
     void setMaxHP(short maxhp);
 
     short getType();
-    std::string mRarity; //common, rare or legendary
+    std::string mRarity;
+    bool legendarySoundPlayed;
 
 protected:
 
 	std::string mName;
-    short mType; //enum weapon, wearable or consumable
+    short mType;
 
     short mRandomValue;
 
-    short mAP;//atack points gained by equipment
-    short mMaxHP;//max health gained by equipment
+    short mAP;
+    short mMaxHP;
 	
 };
 

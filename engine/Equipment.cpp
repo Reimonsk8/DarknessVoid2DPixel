@@ -4,7 +4,7 @@
 #include <time.h>
 
 Equipment::Equipment(std::string name, short ap, short maxhp, bool fixed)
-	:mAP(ap), mMaxHP(maxhp)
+	:mAP(ap), mMaxHP(maxhp), legendarySoundPlayed(false)
 {
 	if (fixed)
 	{
@@ -12,21 +12,22 @@ Equipment::Equipment(std::string name, short ap, short maxhp, bool fixed)
 		mRarity = "common";
         mRandomValue = 1;
 	}
-	else //generate random rarity
+	else
 	{
-        //REVIEW [CTRLS][CONVENTION][Karla]: if-else statements' body must be enclosed by curly braces, even if they are one-liners.
         mRandomValue = rand() % 13 + 1;
-        if (mRandomValue >= 12)
+        if (mRandomValue >= 12) {
             mRarity = "legendary ";
-        else if (mRandomValue >= 8)
+        } else if (mRandomValue >= 8) {
             mRarity = "rare ";
-		else
-			mRarity = "common";
+        } else {
+            mRarity = "common";
+        }
 
-		if (!(mRarity == "common"))
-			mName = mRarity + name;
-		else
+        if (!(mRarity == "common")) {
+            mName = mRarity + name;
+        } else {
             mName = name;
+        }
 	}
 }
 
