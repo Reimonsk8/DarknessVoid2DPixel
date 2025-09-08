@@ -63,15 +63,9 @@ void Enemy::heroAtacked(Character &hero)
     hero.setHP(-(hero.getCurrentEnemy()->getAP()));//deal damage to player
     
     // Trigger hero damage flash animation and screen shake
-    qDebug() << "About to trigger hero damage animations...";
     if (Graphics::instance && Graphics::instance->scene()) {
-        qDebug() << "Graphics instance and scene are valid, calling hero animations...";
         Graphics::instance->startHeroDamageFlash();
-        qDebug() << "Hero damage flash started";
         Graphics::instance->startSpriteShake(8, 300); // Strong screen shake for hero taking damage
-        qDebug() << "Hero screen shake started";
-    } else {
-        qDebug() << "Graphics instance or scene is null, skipping hero animations";
     }
     
     // Use styled log system
@@ -106,18 +100,10 @@ void Enemy::enemyAtacked(Character &hero)
     hero.getCurrentEnemy()->setHP(hero.getAP());//enemy hp - hero AP damage
     
     // Trigger enemy damage flash animation and screen shake
-    qDebug() << "About to trigger enemy damage animations...";
     if (Graphics::instance && Graphics::instance->scene()) {
-        qDebug() << "Graphics instance and scene are valid, calling enemy animations...";
-        qDebug() << "Calling startEnemyDamageFlash for enemy at" << hero.heroRow << hero.heroCol;
         Graphics::instance->startEnemyDamageFlash(hero.heroRow, hero.heroCol);
-        qDebug() << "Enemy damage flash started, calling startSpriteShake...";
         Graphics::instance->startSpriteShake(5, 200); // Medium screen shake for enemy taking damage
-        qDebug() << "Enemy screen shake started";
-    } else {
-        qDebug() << "Graphics instance or scene is null, skipping enemy animations";
     }
-    qDebug() << "Enemy damage animations completed";
     
     temp.append(QString::number(hero.getAP()));
     temp.append(" enemy now has ");

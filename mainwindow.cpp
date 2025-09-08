@@ -100,12 +100,18 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), timer(new QTimer(
     mHPBar->setFormat("/100");
     mAPLabel = new QLabel("AP: 10", this);
     
+    // Create centered score display for status bar
+    scoreLabel = new QLabel("<b><span style='color: #FFD700; font-size: 12px;'>🏆 Enemies: 0 | Score: 0</span></b>");
+    scoreLabel->setStyleSheet("QLabel { color: #FFD700; font-weight: bold; font-size: 12px; }");
+    scoreLabel->setAlignment(Qt::AlignCenter);
+    
     controlsLabel = new QLabel("Controls: WASD=Move | X=Attack | P=Potion | F=Flee | Z=Look");
     
-    // Add widgets to status bar
+    // Add widgets to status bar with score centered
     statusBar->addWidget(mHeroName);
     statusBar->addWidget(mAPLabel);
     statusBar->addWidget(mHPBar);
+    statusBar->addPermanentWidget(scoreLabel);  // Add score as permanent widget (centered)
     statusBar->addPermanentWidget(controlsLabel);
     
     // Set global pointer for log access
@@ -131,7 +137,9 @@ MainWindow::~MainWindow()
     extern QTextEdit *mScrollLog;
     gMainWindow = nullptr;
     mScrollLog = nullptr;
-    qDebug() << "Global pointers nullified during MainWindow destruction";
+    
+    // Nullify Graphics instance during actual MainWindow destruction
+    Graphics::instance = nullptr;
     
     // Clear stylesheet during actual destruction to prevent Qt cleanup issues
     this->setStyleSheet("");
@@ -550,10 +558,6 @@ QWidget *MainWindow::setupContainerVertical()
     connect(setPWDMenu, SIGNAL (triggered()),this, SLOT (changePWD()));
     QWidget *center = new QWidget(this);
 
-    // Create styled score display for top area
-    scoreLabel = new QLabel("<b><span style='color: #FFD700; font-size: 14px;'>🏆 Enemies: 0 | Score: 0</span></b>");
-    scoreLabel->setStyleSheet("QLabel { color: #FFD700; font-weight: bold; font-size: 14px; }");
-
     QWidget *inventory = setupInventory();
     QWidget *centerStack = setupContainerHorizontal();
 
@@ -568,7 +572,6 @@ QWidget *MainWindow::setupContainerVertical()
     /**************/
 
     verticalLayout->setContentsMargins(0, 30, 0, 0); // Add top margin to avoid menu bar overlap
-    verticalLayout->addWidget(scoreLabel, 0, Qt::AlignCenter);  // Add centered score display at top
     verticalLayout->addWidget(inventory,0);
     verticalLayout->addWidget(centerStack,1);  // Give main area all remaining space
     return center;
@@ -1596,9 +1599,8 @@ void MainWindow::cleanupGameObjects()
         Graphics::instance->stopAllAnimations();
     }
     
-    // Nullify the static Graphics pointer to prevent access during destruction
-    Graphics::instance = nullptr;
-    qDebug() << "Static Graphics pointer nullified";
+    // Note: Do NOT nullify the static Graphics pointer during game reset
+    // The Graphics object should remain valid for animations to work
     
     // Stop the idle timer to prevent it from firing during destruction
     if (timer) {

@@ -79,6 +79,9 @@ Graphics::~Graphics()
     if (enemyFlashEffect) {
         delete enemyFlashEffect;
     }
+    
+    // Nullify the static instance pointer
+    instance = nullptr;
 }
 
 void Graphics::SetGenerator(Generator* MainGenerator)
@@ -591,7 +594,7 @@ void Graphics::mousePressEvent(QGraphicsSceneMouseEvent *event)
     QGraphicsItem::mousePressEvent(event);
 }
 
-// Enhanced damage flash animation with multiple flashes
+// Simple damage flash animation (safe version)
 void Graphics::startHeroDamageFlash()
 {
     if (!this || !scene()) {
@@ -599,37 +602,21 @@ void Graphics::startHeroDamageFlash()
     }
     
     try {
-        // Create multiple flash cycles for more dramatic effect
-        int flashCount = 0;
-        int maxFlashes = 4;
+        QGraphicsColorizeEffect* heroFlash = new QGraphicsColorizeEffect();
+        heroFlash->setColor(Qt::red);
+        heroFlash->setStrength(0.8);
         
-        QTimer* flashTimer = new QTimer();
-        flashTimer->setSingleShot(false);
+        this->setGraphicsEffect(heroFlash);
         
-        QObject::connect(flashTimer, &QTimer::timeout, [this, &flashCount, maxFlashes, flashTimer]() {
-            if (flashCount >= maxFlashes) {
-                // Final cleanup
-                this->setGraphicsEffect(nullptr);
-                flashTimer->deleteLater();
-                return;
+        QTimer::singleShot(200, [this]() {
+            if (this && scene()) {
+                try {
+                    this->setGraphicsEffect(nullptr);
+                } catch (...) {
+                    // Ignore exceptions during cleanup
+                }
             }
-            
-            if (flashCount % 2 == 0) {
-                // Flash on
-                QGraphicsColorizeEffect* heroFlash = new QGraphicsColorizeEffect();
-                heroFlash->setColor(Qt::red);
-                heroFlash->setStrength(1.0); // Maximum intensity
-                this->setGraphicsEffect(heroFlash);
-            } else {
-                // Flash off
-                this->setGraphicsEffect(nullptr);
-            }
-            
-            flashCount++;
         });
-        
-        flashTimer->start(100); // Flash every 100ms
-        
     } catch (...) {
         // Ignore exceptions during flash animation
     }
@@ -651,36 +638,21 @@ void Graphics::startEnemyDamageFlash(int enemyRow, int enemyCol)
             if (itemId == enemyId) {
                 QGraphicsPixmapItem* enemyItem = dynamic_cast<QGraphicsPixmapItem*>(item);
                 if (enemyItem) {
-                    // Create multiple flash cycles for enemy
-                    int flashCount = 0;
-                    int maxFlashes = 3;
+                    QGraphicsColorizeEffect* enemyFlash = new QGraphicsColorizeEffect();
+                    enemyFlash->setColor(Qt::red);
+                    enemyFlash->setStrength(0.8);
                     
-                    QTimer* enemyFlashTimer = new QTimer();
-                    enemyFlashTimer->setSingleShot(false);
+                    enemyItem->setGraphicsEffect(enemyFlash);
                     
-                    QObject::connect(enemyFlashTimer, &QTimer::timeout, [enemyItem, &flashCount, maxFlashes, enemyFlashTimer]() {
-                        if (flashCount >= maxFlashes) {
-                            // Final cleanup
-                            enemyItem->setGraphicsEffect(nullptr);
-                            enemyFlashTimer->deleteLater();
-                            return;
+                    QTimer::singleShot(200, [enemyItem]() {
+                        if (enemyItem && enemyItem->scene()) {
+                            try {
+                                enemyItem->setGraphicsEffect(nullptr);
+                            } catch (...) {
+                                // Ignore exceptions during cleanup
+                            }
                         }
-                        
-                        if (flashCount % 2 == 0) {
-                            // Flash on
-                            QGraphicsColorizeEffect* enemyFlash = new QGraphicsColorizeEffect();
-                            enemyFlash->setColor(Qt::red);
-                            enemyFlash->setStrength(1.0); // Maximum intensity
-                            enemyItem->setGraphicsEffect(enemyFlash);
-                        } else {
-                            // Flash off
-                            enemyItem->setGraphicsEffect(nullptr);
-                        }
-                        
-                        flashCount++;
                     });
-                    
-                    enemyFlashTimer->start(120); // Flash every 120ms
                     break;
                 }
             }
@@ -702,34 +674,23 @@ void Graphics::startSpriteShake(int intensity, int duration)
     }
     
     try {
-        // Store original position
-        QPointF originalPos = pos();
+        QRectF originalRect = scene()->sceneRect();
         
-        // Create multiple shake cycles for more dramatic effect
-        int cycles = duration / 50; // Shake every 50ms
-        int cycleCount = 0;
+        int offsetX = (rand() % (intensity * 2)) - intensity;
+        int offsetY = (rand() % (intensity * 2)) - intensity;
         
-        QTimer* shakeTimer = new QTimer();
-        shakeTimer->setSingleShot(false);
+        scene()->setSceneRect(originalRect.x() + offsetX, originalRect.y() + offsetY, 
+                            originalRect.width(), originalRect.height());
         
-        QObject::connect(shakeTimer, &QTimer::timeout, [this, originalPos, intensity, &cycleCount, cycles, shakeTimer]() {
-            if (cycleCount >= cycles) {
-                // Restore original position and stop timer
-                setPos(originalPos);
-                shakeTimer->deleteLater();
-                return;
+        QTimer::singleShot(100, [this, originalRect]() {
+            if (this && scene()) {
+                try {
+                    scene()->setSceneRect(originalRect);
+                } catch (...) {
+                    // Ignore exceptions during restore
+                }
             }
-            
-            // Generate random offset
-            int offsetX = (rand() % (intensity * 2)) - intensity;
-            int offsetY = (rand() % (intensity * 2)) - intensity;
-            
-            setPos(originalPos.x() + offsetX, originalPos.y() + offsetY);
-            cycleCount++;
         });
-        
-        shakeTimer->start(50); // Start shaking every 50ms
-        
     } catch (...) {
         // Ignore exceptions during shake animation
     }
