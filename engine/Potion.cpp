@@ -57,23 +57,25 @@ void Potion::usePotion(Character &hero)
         {
             inputNum = 1;
         }
-        if ((inputNum + 3) <= hero.inventorySize() && (inputNum + 3) >= 4)//validate potion number
+        // Map potion number to inventory slot: potion 1->slot 3, potion 2->slot 4, etc.
+        int inventorySlot = inputNum + 2; // inputNum 1 -> slot 3, inputNum 2 -> slot 4, etc.
+        if (inventorySlot <= hero.inventorySize() && inventorySlot >= 3)//validate potion number
         {
-            int potionHP = hero.selectItem(inputNum + 2).getMaxHP();//potion healing points
+            int potionHP = hero.selectItem(inventorySlot).getMaxHP();//potion healing points
             int maxHP = hero.getMaxHP();//maxhp hero can heal
             int HP = hero.getHP();// initial hero hp
-            hero.setAP(hero.getAP() + hero.selectItem(inputNum + 2).getAP());//increase ap if rare item
+            hero.setAP(hero.getAP() + hero.selectItem(inventorySlot).getAP());//increase ap if rare item
             /*heal 1 point until hero hp = inital hp  + potion hp or max hp reached*/
             for (int heal = HP; (hero.getHP() < (HP + potionHP)) && (hero.getHP() < maxHP); ++heal)
                 hero.setHP(1);
             //QSound::play(gShortcut+"\\Sounds\\powerup.wav");
             std::cout << hero.getHP() << std::endl;
             QString temp;
-            temp.append(QString::fromStdString(hero.selectItem(inputNum + 2).getName()));
+            temp.append(QString::fromStdString(hero.selectItem(inventorySlot).getName()));
             temp.append(" used!! hero hp now is ");
             temp.append(QString::number(hero.getHP()));
             addStyledLogEntry(temp, false);
-            hero.removeFromInventory(inputNum + 2);
+            hero.removeFromInventory(inventorySlot);
         }
         else
         {

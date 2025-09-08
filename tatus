@@ -1,0 +1,35 @@
+warning: in the working copy of 'Graphics.cpp', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'Levels/hard_0.txt', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'engine/Enemy.cpp', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'engine/Enemy.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'engine/Generator.cpp', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'engine/Potion.cpp', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'engine/common.cpp', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'engine/common.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'mainwindow.cpp', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'mainwindow.h', LF will be replaced by CRLF the next time Git touches it
+.gitignore
+DarknessVoid.pro.user
+Graphics.cpp
+Graphics.h
+Levels/hard_0.txt
+SoundEngine.h
+engine/Armor.cpp
+engine/Character.cpp
+engine/Enemy.cpp
+engine/Enemy.h
+engine/Equipment.cpp
+engine/Equipment.h
+engine/GameManager.cpp
+engine/Generator.cpp
+engine/Generator.h
+engine/Helmet.cpp
+engine/Potion.cpp
+engine/Weapon.cpp
+engine/common.cpp
+engine/common.h
+engine/graphics.cpp
+engine/graphics.h
+mainwindow.cpp
+mainwindow.h
+soundengine.cpp

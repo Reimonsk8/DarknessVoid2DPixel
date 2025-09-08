@@ -8,8 +8,8 @@
 #include <QtDebug>
 
 
-Enemy::Enemy(std::string name, short ap, short hp, short flee)
-    :mName(name),  mHP(hp), mAP(ap), mFlee(flee)
+Enemy::Enemy(std::string name, short ap, short hp, short flee, short difficulty)
+    :mName(name),  mHP(hp), mAP(ap), mFlee(flee), mDifficulty(difficulty)
 {
 
 };
@@ -37,6 +37,11 @@ short Enemy::getAP()
 	return mAP;
 };
 
+short Enemy::getDifficulty()
+{
+	return mDifficulty;
+};
+
 bool Enemy::tryFlee()
 {
     short random_value = rand() % 13 + 1;
@@ -58,9 +63,15 @@ void Enemy::heroAtacked(Character &hero)
     hero.setHP(-(hero.getCurrentEnemy()->getAP()));//deal damage to player
     
     // Trigger hero damage flash animation and screen shake
+    qDebug() << "About to trigger hero damage animations...";
     if (Graphics::instance && Graphics::instance->scene()) {
+        qDebug() << "Graphics instance and scene are valid, calling hero animations...";
         Graphics::instance->startHeroDamageFlash();
+        qDebug() << "Hero damage flash started";
         Graphics::instance->startSpriteShake(8, 300); // Strong screen shake for hero taking damage
+        qDebug() << "Hero screen shake started";
+    } else {
+        qDebug() << "Graphics instance or scene is null, skipping hero animations";
     }
     
     // Use styled log system
@@ -97,14 +108,14 @@ void Enemy::enemyAtacked(Character &hero)
     // Trigger enemy damage flash animation and screen shake
     qDebug() << "About to trigger enemy damage animations...";
     if (Graphics::instance && Graphics::instance->scene()) {
-        qDebug() << "Graphics instance and scene are valid, calling animations...";
-        qDebug() << "Calling startEnemyDamageFlash...";
+        qDebug() << "Graphics instance and scene are valid, calling enemy animations...";
+        qDebug() << "Calling startEnemyDamageFlash for enemy at" << hero.heroRow << hero.heroCol;
         Graphics::instance->startEnemyDamageFlash(hero.heroRow, hero.heroCol);
-        qDebug() << "startEnemyDamageFlash completed, calling startSpriteShake...";
+        qDebug() << "Enemy damage flash started, calling startSpriteShake...";
         Graphics::instance->startSpriteShake(5, 200); // Medium screen shake for enemy taking damage
-        qDebug() << "startSpriteShake completed";
+        qDebug() << "Enemy screen shake started";
     } else {
-        qDebug() << "Graphics instance or scene is null, skipping animations";
+        qDebug() << "Graphics instance or scene is null, skipping enemy animations";
     }
     qDebug() << "Enemy damage animations completed";
     
@@ -120,6 +131,12 @@ void Enemy::enemyAtacked(Character &hero)
     {
         SoundEngine::PlaySoundByName("win", 1);
         addStyledLogEntry("enemy defeated, Victory achivied!!!\n", true);
+        
+        // Notify scoring system about enemy defeat
+        QString enemyName = QString::fromStdString(hero.getCurrentEnemy()->getName());
+        int enemyDifficulty = hero.getCurrentEnemy()->getDifficulty(); // Use difficulty instead of AP
+        notifyEnemyDefeated(enemyName, enemyDifficulty);
+        
 		lvl.grid[hero.heroRow][hero.heroCol] = 'O';//remove enemy
         hero.getCurrentEnemy()->posX = OUT_OF_RANGE;
         hero.getCurrentEnemy()->posY = OUT_OF_RANGE;

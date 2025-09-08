@@ -12,7 +12,7 @@ public:
     short posY;
     short posX;
 
-    Enemy(std::string name, short ap, short hp, short flee);//constructor sets all enemy values on creation
+    Enemy(std::string name, short ap, short hp, short flee, short difficulty = 1);//constructor sets all enemy values on creation
 	~Enemy();
 	
 	std::string getName();
@@ -21,6 +21,8 @@ public:
     void setHP(short damage);//enemy recibes damage by this method
 	
     short getAP();//enemy damages player by this method
+	
+    short getDifficulty();//returns enemy difficulty for scoring
 	
 	bool tryFlee();
 
@@ -33,6 +35,7 @@ private:
     short mHP;
     short mAP;
     short mFlee;// to flee value should be higher than this max value should be equal to 11
+    short mDifficulty;// difficulty level for scoring (1-10)
 	
 };
 

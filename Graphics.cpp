@@ -225,13 +225,15 @@ void Graphics::ObjectToDraw(int row, int col)
             newtile->setData(0, QString("tile_%1_%2").arg(row).arg(col));
             scene()->addItem(newtile);
 
-            QString enemyName = QString::fromStdString(Generated->returnEnemy(row, col)->getName());
-            QString enemyPath = getEnemyGraphic(enemyName);
+            if (Generated && Generated->returnEnemy(row, col)) {
+                QString enemyName = QString::fromStdString(Generated->returnEnemy(row, col)->getName());
+                QString enemyPath = getEnemyGraphic(enemyName);
 
-            QGraphicsPixmapItem *newItem=new QGraphicsPixmapItem(QPixmap(enemyPath).scaled(gStep,gStep));
-            newItem->setPos(col*gStep,row*gStep);
-            newItem->setData(0, QString("enemy_%1_%2").arg(row).arg(col));
-            scene()->addItem(newItem);
+                QGraphicsPixmapItem *newItem=new QGraphicsPixmapItem(QPixmap(enemyPath).scaled(gStep,gStep));
+                newItem->setPos(col*gStep,row*gStep);
+                newItem->setData(0, QString("enemy_%1_%2").arg(row).arg(col));
+                scene()->addItem(newItem);
+            }
         }
     }break;
 
@@ -244,20 +246,22 @@ void Graphics::ObjectToDraw(int row, int col)
             newtile->setData(0, QString("tile_%1_%2").arg(row).arg(col));
             scene()->addItem(newtile);
             
-            //legendary glow//
-            QString weaponRarity = QString::fromStdString(Generated->returnWeapon(row, col)->mRarity);
-            QGraphicsEllipseItem *glowItem = RarityGlow(weaponRarity, row, col);
-            glowItem->setData(0, QString("glow_%1_%2").arg(row).arg(col));
-            scene()->addItem(glowItem);
+            if (Generated && Generated->returnWeapon(row, col)) {
+                //legendary glow//
+                QString weaponRarity = QString::fromStdString(Generated->returnWeapon(row, col)->mRarity);
+                QGraphicsEllipseItem *glowItem = RarityGlow(weaponRarity, row, col);
+                glowItem->setData(0, QString("glow_%1_%2").arg(row).arg(col));
+                scene()->addItem(glowItem);
 
-            //weapon graphics spawner//
-            QString weaponName = QString::fromStdString(Generated->returnWeapon(row, col)->getName());
-            QString weaponPath = getEquipmentGraphic(weaponName, Type::T_Weapon);
+                //weapon graphics spawner//
+                QString weaponName = QString::fromStdString(Generated->returnWeapon(row, col)->getName());
+                QString weaponPath = getEquipmentGraphic(weaponName, Type::T_Weapon);
 
-            QGraphicsPixmapItem *newItem= new QGraphicsPixmapItem(QPixmap(weaponPath).scaled(gStep,gStep));
-            newItem->setPos(col*gStep + (gStep/4) ,row*gStep - (gStep/4));
-            newItem->setData(0, QString("weapon_%1_%2").arg(row).arg(col));
-            scene()->addItem(newItem);
+                QGraphicsPixmapItem *newItem= new QGraphicsPixmapItem(QPixmap(weaponPath).scaled(gStep,gStep));
+                newItem->setPos(col*gStep + (gStep/4) ,row*gStep - (gStep/4));
+                newItem->setData(0, QString("weapon_%1_%2").arg(row).arg(col));
+                scene()->addItem(newItem);
+            }
         }
     }break;
 
@@ -270,20 +274,22 @@ void Graphics::ObjectToDraw(int row, int col)
             newtile->setData(0, QString("tile_%1_%2").arg(row).arg(col));
             scene()->addItem(newtile);
 
-            //legendary glow//
-            QString HelmetRarity = QString::fromStdString(Generated->returnHelmet(row, col)->mRarity);
-            QGraphicsEllipseItem *glowItem = RarityGlow(HelmetRarity, row, col);
-            glowItem->setData(0, QString("glow_%1_%2").arg(row).arg(col));
-            scene()->addItem(glowItem);
+            if (Generated && Generated->returnHelmet(row, col)) {
+                //legendary glow//
+                QString HelmetRarity = QString::fromStdString(Generated->returnHelmet(row, col)->mRarity);
+                QGraphicsEllipseItem *glowItem = RarityGlow(HelmetRarity, row, col);
+                glowItem->setData(0, QString("glow_%1_%2").arg(row).arg(col));
+                scene()->addItem(glowItem);
 
-            //weapon graphics spawner//
-            QString helmetName = QString::fromStdString(Generated->returnHelmet(row, col)->getName());
-            QString helmetPath = getEquipmentGraphic(helmetName, Type::T_Head);
+                //weapon graphics spawner//
+                QString helmetName = QString::fromStdString(Generated->returnHelmet(row, col)->getName());
+                QString helmetPath = getEquipmentGraphic(helmetName, Type::T_Head);
 
-            QGraphicsPixmapItem *newItem=new QGraphicsPixmapItem(QPixmap(helmetPath).scaled(gStep,gStep));
-            newItem->setPos(col*gStep, row*gStep + (gStep/8));
-            newItem->setData(0, QString("helmet_%1_%2").arg(row).arg(col));
-            scene()->addItem(newItem);
+                QGraphicsPixmapItem *newItem=new QGraphicsPixmapItem(QPixmap(helmetPath).scaled(gStep,gStep));
+                newItem->setPos(col*gStep, row*gStep + (gStep/8));
+                newItem->setData(0, QString("helmet_%1_%2").arg(row).arg(col));
+                scene()->addItem(newItem);
+            }
         }
     }break;
     case('A'):
@@ -295,20 +301,22 @@ void Graphics::ObjectToDraw(int row, int col)
             newtile->setData(0, QString("tile_%1_%2").arg(row).arg(col));
             scene()->addItem(newtile);
 
-            //legendary glow//
-            QString ArmorRarity = QString::fromStdString(Generated->returnArmor(row, col)->mRarity);
-            QGraphicsEllipseItem *glowItem = RarityGlow(ArmorRarity, row, col);
-            glowItem->setData(0, QString("glow_%1_%2").arg(row).arg(col));
-            scene()->addItem(glowItem);
+            if (Generated && Generated->returnArmor(row, col)) {
+                //legendary glow//
+                QString ArmorRarity = QString::fromStdString(Generated->returnArmor(row, col)->mRarity);
+                QGraphicsEllipseItem *glowItem = RarityGlow(ArmorRarity, row, col);
+                glowItem->setData(0, QString("glow_%1_%2").arg(row).arg(col));
+                scene()->addItem(glowItem);
 
-            //weapon graphics spawner//
-            QString armorName = QString::fromStdString(Generated->returnArmor(row, col)->getName());
-            QString armorPath = getEquipmentGraphic(armorName, Type::T_Chest);
+                //weapon graphics spawner//
+                QString armorName = QString::fromStdString(Generated->returnArmor(row, col)->getName());
+                QString armorPath = getEquipmentGraphic(armorName, Type::T_Chest);
 
-            QGraphicsPixmapItem *newItem=new QGraphicsPixmapItem(QPixmap(armorPath).scaled(gStep,gStep));
-            newItem->setPos(col*gStep, row*gStep - (gStep/4));
-            newItem->setData(0, QString("armor_%1_%2").arg(row).arg(col));
-            scene()->addItem(newItem);
+                QGraphicsPixmapItem *newItem=new QGraphicsPixmapItem(QPixmap(armorPath).scaled(gStep,gStep));
+                newItem->setPos(col*gStep, row*gStep - (gStep/4));
+                newItem->setData(0, QString("armor_%1_%2").arg(row).arg(col));
+                scene()->addItem(newItem);
+            }
         }
     }break;
     case('P'):
@@ -320,16 +328,18 @@ void Graphics::ObjectToDraw(int row, int col)
             newtile->setData(0, QString("tile_%1_%2").arg(row).arg(col));
             scene()->addItem(newtile);
 
-            //legendary glow//
-            QString rarity = QString::fromStdString(Generated->returnPotion(row, col)->mRarity);
-            QGraphicsEllipseItem *glowItem = RarityGlow(rarity, row, col);
-            glowItem->setData(0, QString("glow_%1_%2").arg(row).arg(col));
-            scene()->addItem(glowItem);
+            if (Generated && Generated->returnPotion(row, col)) {
+                //legendary glow//
+                QString rarity = QString::fromStdString(Generated->returnPotion(row, col)->mRarity);
+                QGraphicsEllipseItem *glowItem = RarityGlow(rarity, row, col);
+                glowItem->setData(0, QString("glow_%1_%2").arg(row).arg(col));
+                scene()->addItem(glowItem);
 
-            QGraphicsPixmapItem *newItem=new QGraphicsPixmapItem(QPixmap(mPotion).scaled(gStep/2,gStep/2));
-            newItem->setPos(col*gStep + (gStep/4) ,row*gStep + (gStep/4));
-            newItem->setData(0, QString("potion_%1_%2").arg(row).arg(col));
-            scene()->addItem(newItem);
+                QGraphicsPixmapItem *newItem=new QGraphicsPixmapItem(QPixmap(mPotion).scaled(gStep/2,gStep/2));
+                newItem->setPos(col*gStep + (gStep/4) ,row*gStep + (gStep/4));
+                newItem->setData(0, QString("potion_%1_%2").arg(row).arg(col));
+                scene()->addItem(newItem);
+            }
         }
     }break;
 
@@ -415,8 +425,15 @@ void Graphics::drawMapUpdateVecinity()
 void Graphics::drawMapFullStatic()
 {
     qDebug() << "drawMapFullStatic() called";
+    
+    // Safety check for scene
+    if (scene() == nullptr) {
+        qDebug() << "Scene is null in drawMapFullStatic() - cannot draw";
+        return;
+    }
+    
     setZValue(0);//draw in background
-    QGraphicsRectItem *rectItem = scene()->addRect(0, 0, gStep*30, gStep*30,QPen(Qt::NoPen),QBrush(Qt::black));
+    QGraphicsRectItem *rectItem = scene()->addRect(0, 0, gStep*30, gStep*30,QPen(Qt::NoPen),QBrush(QColor("#1a1a1a"))); // Dark theme background
     rectItem->setData(0, "background_rect"); // Add identifier for cleanup
     setFocus();
     update();
@@ -574,7 +591,7 @@ void Graphics::mousePressEvent(QGraphicsSceneMouseEvent *event)
     QGraphicsItem::mousePressEvent(event);
 }
 
-// Simple damage flash animation (safe version)
+// Enhanced damage flash animation with multiple flashes
 void Graphics::startHeroDamageFlash()
 {
     if (!this || !scene()) {
@@ -582,21 +599,37 @@ void Graphics::startHeroDamageFlash()
     }
     
     try {
-        QGraphicsColorizeEffect* heroFlash = new QGraphicsColorizeEffect();
-        heroFlash->setColor(Qt::red);
-        heroFlash->setStrength(0.8);
+        // Create multiple flash cycles for more dramatic effect
+        int flashCount = 0;
+        int maxFlashes = 4;
         
-        this->setGraphicsEffect(heroFlash);
+        QTimer* flashTimer = new QTimer();
+        flashTimer->setSingleShot(false);
         
-        QTimer::singleShot(200, [this]() {
-            if (this && scene()) {
-                try {
-                    this->setGraphicsEffect(nullptr);
-                } catch (...) {
-                    // Ignore exceptions during cleanup
-                }
+        QObject::connect(flashTimer, &QTimer::timeout, [this, &flashCount, maxFlashes, flashTimer]() {
+            if (flashCount >= maxFlashes) {
+                // Final cleanup
+                this->setGraphicsEffect(nullptr);
+                flashTimer->deleteLater();
+                return;
             }
+            
+            if (flashCount % 2 == 0) {
+                // Flash on
+                QGraphicsColorizeEffect* heroFlash = new QGraphicsColorizeEffect();
+                heroFlash->setColor(Qt::red);
+                heroFlash->setStrength(1.0); // Maximum intensity
+                this->setGraphicsEffect(heroFlash);
+            } else {
+                // Flash off
+                this->setGraphicsEffect(nullptr);
+            }
+            
+            flashCount++;
         });
+        
+        flashTimer->start(100); // Flash every 100ms
+        
     } catch (...) {
         // Ignore exceptions during flash animation
     }
@@ -618,21 +651,36 @@ void Graphics::startEnemyDamageFlash(int enemyRow, int enemyCol)
             if (itemId == enemyId) {
                 QGraphicsPixmapItem* enemyItem = dynamic_cast<QGraphicsPixmapItem*>(item);
                 if (enemyItem) {
-                    QGraphicsColorizeEffect* enemyFlash = new QGraphicsColorizeEffect();
-                    enemyFlash->setColor(Qt::red);
-                    enemyFlash->setStrength(0.8);
+                    // Create multiple flash cycles for enemy
+                    int flashCount = 0;
+                    int maxFlashes = 3;
                     
-                    enemyItem->setGraphicsEffect(enemyFlash);
+                    QTimer* enemyFlashTimer = new QTimer();
+                    enemyFlashTimer->setSingleShot(false);
                     
-                    QTimer::singleShot(200, [enemyItem]() {
-                        if (enemyItem && enemyItem->scene()) {
-                            try {
-                                enemyItem->setGraphicsEffect(nullptr);
-                            } catch (...) {
-                                // Ignore exceptions during cleanup
-                            }
+                    QObject::connect(enemyFlashTimer, &QTimer::timeout, [enemyItem, &flashCount, maxFlashes, enemyFlashTimer]() {
+                        if (flashCount >= maxFlashes) {
+                            // Final cleanup
+                            enemyItem->setGraphicsEffect(nullptr);
+                            enemyFlashTimer->deleteLater();
+                            return;
                         }
+                        
+                        if (flashCount % 2 == 0) {
+                            // Flash on
+                            QGraphicsColorizeEffect* enemyFlash = new QGraphicsColorizeEffect();
+                            enemyFlash->setColor(Qt::red);
+                            enemyFlash->setStrength(1.0); // Maximum intensity
+                            enemyItem->setGraphicsEffect(enemyFlash);
+                        } else {
+                            // Flash off
+                            enemyItem->setGraphicsEffect(nullptr);
+                        }
+                        
+                        flashCount++;
                     });
+                    
+                    enemyFlashTimer->start(120); // Flash every 120ms
                     break;
                 }
             }
@@ -647,90 +695,6 @@ void Graphics::stopDamageFlash()
     // Function disabled - no action taken
 }
 
-
-QWidget* MainWindow::setupMovementArrows()
-{
-    QWidget* widget = new QWidget;
-    QGridLayout* layout = new QGridLayout(widget);
-    QLabel* label = new QLabel("Controls");
-    layout->addWidget(label);
-
-    enum Buttons
-    {
-        GB_UP =4,
-        GB_LEFT = 6,
-        GB_RIGHT = 8,
-        GB_DOWN = 10,
-        GB_ACTION = 21,
-        GB_POTION = 22,
-        GB_FLEE = 23,
-        GB_NOthing = 24,
-    };
-
-    int counter = 0;
-    // Creating buttons and adding them to the grid layout
-    for (int row = 0; row < 9; ++row) {
-        for (int col = 0; col < 3; ++col) {
-            switch(counter)
-            {
-                case GB_UP:
-                {
-                QPushButton* buttonGB_UP = new QPushButton(QString("UP"), this);
-                    connect(buttonGB_UP, &QPushButton::clicked, layout, [this] { inputHandle(nullptr, B_Up); });
-                    layout->addWidget(buttonGB_UP, row, col);
-                    break;
-                }
-                case GB_LEFT:
-                {
-                    QPushButton* buttonGB_LEFT = new QPushButton(QString("LEFT"), this);
-                    connect(buttonGB_LEFT, &QPushButton::clicked, layout, [this] { inputHandle(nullptr, B_Left); });
-                    layout->addWidget(buttonGB_LEFT, row, col);
-                    break;
-                }
-                case GB_RIGHT:
-                {
-                    QPushButton* buttonGB_RIGHT= new QPushButton(QString("RIGHT"), this);
-                    connect(buttonGB_RIGHT, &QPushButton::clicked, layout, [this] { inputHandle(nullptr, B_Right); });
-                    layout->addWidget(buttonGB_RIGHT, row, col);
-                    break;
-                }
-                case GB_DOWN:
-                {
-                    QPushButton* buttonGB_DOWN = new QPushButton(QString("DOWN"), this);
-                    connect(buttonGB_DOWN, &QPushButton::clicked, layout, [this] { inputHandle(nullptr, B_Down); });
-                    layout->addWidget(buttonGB_DOWN, row, col);
-                    break;
-                }
-                case GB_ACTION:
-                {
-                    QPushButton* buttonGB_ACTION = new QPushButton(QString("ACTION"), this);
-                    connect(buttonGB_ACTION, &QPushButton::clicked, layout, [this] { inputHandle(nullptr, B_Atack); });
-                    layout->addWidget(buttonGB_ACTION, row, col);
-                    break;
-                }
-                case GB_POTION:
-                {
-                    QPushButton* buttonGB_POTION = new QPushButton(QString("POTION"), this);
-                    connect(buttonGB_POTION, &QPushButton::clicked, layout, [this] { inputHandle(nullptr, B_Potion); });
-                    layout->addWidget(buttonGB_POTION, row, col);
-                    break;
-                }
-                case GB_FLEE:
-                {
-                    QPushButton* buttonGB_FLEE = new QPushButton(tr("FLEE"), this);
-                    connect(buttonGB_FLEE, &QPushButton::clicked, this, [this] { inputHandle(nullptr, B_Flee); });
-                    layout->addWidget(buttonGB_FLEE, row, col);
-                    break;
-                }
-            }
-            ++counter;
-        }
-    }
-
-    layout->setAlignment(Qt::AlignCenter);
-    return widget;
-}
-
 void Graphics::startSpriteShake(int intensity, int duration)
 {
     if (!this || !scene()) {
@@ -738,23 +702,34 @@ void Graphics::startSpriteShake(int intensity, int duration)
     }
     
     try {
-        QRectF originalRect = scene()->sceneRect();
+        // Store original position
+        QPointF originalPos = pos();
         
-        int offsetX = (rand() % (intensity * 2)) - intensity;
-        int offsetY = (rand() % (intensity * 2)) - intensity;
+        // Create multiple shake cycles for more dramatic effect
+        int cycles = duration / 50; // Shake every 50ms
+        int cycleCount = 0;
         
-        scene()->setSceneRect(originalRect.x() + offsetX, originalRect.y() + offsetY, 
-                            originalRect.width(), originalRect.height());
+        QTimer* shakeTimer = new QTimer();
+        shakeTimer->setSingleShot(false);
         
-        QTimer::singleShot(100, [this, originalRect]() {
-            if (this && scene()) {
-                try {
-                    scene()->setSceneRect(originalRect);
-                } catch (...) {
-                    // Ignore exceptions during restore
-                }
+        QObject::connect(shakeTimer, &QTimer::timeout, [this, originalPos, intensity, &cycleCount, cycles, shakeTimer]() {
+            if (cycleCount >= cycles) {
+                // Restore original position and stop timer
+                setPos(originalPos);
+                shakeTimer->deleteLater();
+                return;
             }
+            
+            // Generate random offset
+            int offsetX = (rand() % (intensity * 2)) - intensity;
+            int offsetY = (rand() % (intensity * 2)) - intensity;
+            
+            setPos(originalPos.x() + offsetX, originalPos.y() + offsetY);
+            cycleCount++;
         });
+        
+        shakeTimer->start(50); // Start shaking every 50ms
+        
     } catch (...) {
         // Ignore exceptions during shake animation
     }

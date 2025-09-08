@@ -1,0 +1,23 @@
+100 30
+20 20
+S O O O O O O O O O P O O O O O O O O O
+O L L L L L L L L L L L L L L L O O O O
+O L O O O O O O O O O O O O O L O P O O
+O L O E O P O W O O O O O O A O L O O O
+O L O O O O O O O O O O O O O O L O O E
+O L O O O O H O O O O O O O O O L L L L
+O L O O O O O O O O O O O O O O O O O L
+O L L L L L L L L L L L L L L L L L O L
+O O O O O O O O O O O O O O O O O L O L
+O O O E O O O O O O P O O O O O O L O L
+O O O O O O O O O O O O O O O W O L O L
+O O O O O H O O O O O O O O O O O L O L
+L L L L L L L L L L L L L L L L L L O L
+O O O O O O O O O O O O O O O O O O O L
+O O O E O O O P O O O O O O A O O O O L
+O O O O O O O O O O O O O O O O O E O L
+O O O O O O O O O O O O O O O O O O O L
+O O P O O O O O O O O O O O O O O O O L
+L L L L L L L L L L L L L L L L L L L L
+X O O O O O O O O O O O O O O O O O O F
+

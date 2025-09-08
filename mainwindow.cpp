@@ -15,10 +15,11 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QToolButton>
-#include <QJsonDocument>
 #include <QButtonGroup>
 #include <QDialog>
 #include <QInputDialog>
+#include <QThread>
+#include <QApplication>
 #include <QFileDialog>
 #include <QMessageBox>
 #include <QProgressDialog>
@@ -34,8 +35,6 @@
 #include <QDebug>
 #include <QSpinBox>
 #include <QTextEdit>
-#include <QJsonObject>
-#include <QJsonArray>
 #include <QEvent>
 #include <QPixmap>
 #include <QGraphicsScene>
@@ -77,16 +76,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), timer(new QTimer(
     mLogEntries.clear();
     mCurrentCommandIndex = -1;
     
-    // Initialize auto-save system
-    autoSaveTimer = new QTimer(this);
-    autoSaveEnabled = true;
-    autoSaveIntervalMinutes = 2; // Auto-save every 2 minutes
-    connect(autoSaveTimer, &QTimer::timeout, this, &MainWindow::performAutoSave);
-    autoSaveTimer->start(autoSaveIntervalMinutes * 60 * 1000); // Convert minutes to milliseconds
     
-    // Initialize settings
+    // Initialize scoring system
+    enemiesDefeated = 0;
+    totalScore = 0;
+    
+    // Initialize audio settings
     masterVolume = 1.0f;
-    musicVolume = 0.7f;
+    musicVolume = 1.0f;
     sfxVolume = 1.0f;
     screenShakeEnabled = true;
     damageFlashEnabled = true;
@@ -95,21 +92,64 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), timer(new QTimer(
     statusBar = new QStatusBar(this);
     setStatusBar(statusBar);
     
-    healthLabel = new QLabel("Health: --/--");
-    positionLabel = new QLabel("Position: --, --");
-    autoSaveLabel = new QLabel("Auto-save: ON");
+    // Create status bar widgets
+    mHeroName = new QLabel("Name: Player", this);
+    mHPBar = new QProgressBar(this);
+    mHPBar->setRange(0,100);
+    mHPBar->setOrientation(Qt::Horizontal);
+    mHPBar->setFormat("/100");
+    mAPLabel = new QLabel("AP: 10", this);
     
-    statusBar->addWidget(healthLabel);
-    statusBar->addWidget(positionLabel);
-    statusBar->addPermanentWidget(autoSaveLabel);
+    controlsLabel = new QLabel("Controls: WASD=Move | X=Attack | P=Potion | F=Flee | Z=Look");
+    
+    // Add widgets to status bar
+    statusBar->addWidget(mHeroName);
+    statusBar->addWidget(mAPLabel);
+    statusBar->addWidget(mHPBar);
+    statusBar->addPermanentWidget(controlsLabel);
     
     // Set global pointer for log access
     extern MainWindow* gMainWindow;
     gMainWindow = this;
+    
+    // Initialize SoundEngine
+    SoundEngine::SetMasterVolume(1.0f);
+    SoundEngine::SetMusicVolume(0.7f);
+    SoundEngine::SetSFXVolume(1.0f);
+    qDebug() << "SoundEngine initialized";
+    
+    // Apply modern dark theme
+    applyDarkTheme();
 }
 
 MainWindow::~MainWindow()
 {
+    qDebug() << "MainWindow destructor called";
+    
+    // Nullify global pointers to prevent access during/after destruction
+    extern MainWindow* gMainWindow;
+    extern QTextEdit *mScrollLog;
+    gMainWindow = nullptr;
+    mScrollLog = nullptr;
+    qDebug() << "Global pointers nullified during MainWindow destruction";
+    
+    // Clear stylesheet during actual destruction to prevent Qt cleanup issues
+    this->setStyleSheet("");
+    qDebug() << "Main window stylesheet cleared during destruction";
+    
+    // Force Qt to process all pending events before destruction
+    QApplication::processEvents();
+    qDebug() << "Qt events processed before MainWindow destruction";
+    
+    // Ensure all timers are stopped
+    if (timer) {
+        timer->stop();
+        qDebug() << "Timer stopped in destructor";
+    }
+    
+    qDebug() << "About to call QMainWindow destructor";
+    // QMainWindow destructor will be called automatically
+    qDebug() << "MainWindow destructor completed";
 }
 
 /*Member functions*/
@@ -142,24 +182,9 @@ void MainWindow::inputHandle(QKeyEvent *event, const int input)
             toggleInventory();
             return;
         }
-        else if (event->key() == Qt::Key_S) {
-            // Quick save (S key)
-            quickSave();
-            return;
-        }
-        else if (event->key() == Qt::Key_L) {
-            // Quick load (L key)
-            quickLoad();
-            return;
-        }
         else if (event->key() == Qt::Key_M) {
             // Toggle music (M key)
             toggleMusic();
-            return;
-        }
-        else if (event->key() == Qt::Key_A) {
-            // Toggle auto-save (A key)
-            enableAutoSave(!autoSaveEnabled);
             return;
         }
         else if (event->key() == Qt::Key_F1) {
@@ -201,7 +226,12 @@ void MainWindow::inputHandle(QKeyEvent *event, const int input)
         {
             gState = S_Normal;
         }
-        mDGraphics->drawPosition();
+        // Safety check before drawing
+        if (mDGraphics && mDGraphics->Generated && mDGraphics->Hero) {
+            mDGraphics->drawPosition();
+        } else {
+            qDebug() << "Safety check failed in input handling - not drawing position";
+        }
         updateStatusBar(); // Update status bar after movement
     }
     //qDebug() << "0 normal 1 key input 2 item pickup \n";
@@ -268,7 +298,10 @@ void MainWindow::gameEventHandle()
     else
     {
         qDebug() << "Handling normal game state";
+        qDebug() << "Hero pointer:" << mDGraphics->Hero;
+        qDebug() << "Generated pointer:" << Generated;
         try {
+            qDebug() << "About to call GameManager::handleEvent";
             GameManager::handleEvent(*mDGraphics->Hero,*Generated);
             qDebug() << "GameManager::handleEvent completed";
         } catch (...) {
@@ -276,6 +309,7 @@ void MainWindow::gameEventHandle()
         }
         
         try {
+            qDebug() << "About to call updateInventory";
             updateInventory();
             qDebug() << "updateInventory completed";
         } catch (...) {
@@ -297,9 +331,20 @@ void MainWindow::updateInventory()
 {
     qDebug() << "updateInventory() called";
     
-    const int dim = 40;
+    // Safety checks
+    if(mDGraphics == nullptr) {
+        qDebug() << "mDGraphics is null in updateInventory, returning";
+        return;
+    }
+    
     if(mDGraphics->Hero == nullptr) {
         qDebug() << "Hero is null in updateInventory, returning";
+        return;
+    }
+    
+    // Check if inventory buttons exist
+    if(mHelmet == nullptr || mArmor == nullptr || mWeapon == nullptr) {
+        qDebug() << "Inventory buttons are null in updateInventory, returning";
         return;
     }
     
@@ -312,13 +357,17 @@ void MainWindow::updateInventory()
         Equipment myHelmet = mDGraphics->Hero->selectItem(T_Head);
         QString helmName = QString::fromStdString(myHelmet.getName());
         mHelmeticon = mDGraphics->getEquipmentGraphic(helmName, T_Head);
-        mHelmet->setIcon(QIcon(QPixmap(mHelmeticon).scaled(dim,dim)));
-        QString temp = " MaxHP:"+ QString::number(myHelmet.getMaxHP());
-        mHelmetLabel->setText(QString::fromStdString(myHelmet.getName())+temp);
+        // Scale icon to fit nicely within the button (leave space for text)
+        QSize iconSize = QSize(60, 60); // Fixed icon size for consistency
+        QPixmap helmetPixmap = QPixmap(mHelmeticon).scaled(iconSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        mHelmet->setIcon(QIcon(helmetPixmap));
+        mHelmet->setIconSize(iconSize);
+        QString temp = QString::fromStdString(myHelmet.getName()) + "\nMaxHP:"+ QString::number(myHelmet.getMaxHP());
+        mHelmet->setText(temp);
     }
     else
     {
-        mHelmetLabel->setText("");
+        mHelmet->setText("");
         mHelmet->setIcon(QIcon());
     }
     if(invSize >= 2)
@@ -326,13 +375,17 @@ void MainWindow::updateInventory()
         Equipment myArmor = mDGraphics->Hero->selectItem(T_Chest);
         QString armorName = QString::fromStdString(myArmor.getName());
         mArmoricon = mDGraphics->getEquipmentGraphic(armorName, T_Chest);
-        mArmor->setIcon(QIcon(QPixmap(mArmoricon).scaled(dim,dim)));
-        QString temp = " MaxHP:"+ QString::number(myArmor.getMaxHP());
-        mArmorLabel->setText(QString::fromStdString(myArmor.getName())+temp);
+        // Scale icon to fit nicely within the button (leave space for text)
+        QSize iconSize = QSize(60, 60); // Fixed icon size for consistency
+        QPixmap armorPixmap = QPixmap(mArmoricon).scaled(iconSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        mArmor->setIcon(QIcon(armorPixmap));
+        mArmor->setIconSize(iconSize);
+        QString temp = QString::fromStdString(myArmor.getName()) + "\nMaxHP:"+ QString::number(myArmor.getMaxHP());
+        mArmor->setText(temp);
     }
     else
     {
-        mArmorLabel->setText("");
+        mArmor->setText("");
         mArmor->setIcon(QIcon());
     }
     if(invSize >= 3)
@@ -340,13 +393,17 @@ void MainWindow::updateInventory()
         Equipment myWeapon= mDGraphics->Hero->selectItem(T_Weapon);
         QString weaponName = QString::fromStdString(myWeapon.getName());
         mWeaponicon = mDGraphics->getEquipmentGraphic(weaponName, T_Weapon);
-        mWeapon->setIcon(QIcon(QPixmap(mWeaponicon).scaled(dim,dim)));
-        QString temp = " AP:"+ QString::number(myWeapon.getAP());
-        mWeaponLabel->setText(QString::fromStdString(myWeapon.getName())+temp);
+        // Scale icon to fit nicely within the button (leave space for text)
+        QSize iconSize = QSize(60, 60); // Fixed icon size for consistency
+        QPixmap weaponPixmap = QPixmap(mWeaponicon).scaled(iconSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        mWeapon->setIcon(QIcon(weaponPixmap));
+        mWeapon->setIconSize(iconSize);
+        QString temp = QString::fromStdString(myWeapon.getName()) + "\nAP:"+ QString::number(myWeapon.getAP());
+        mWeapon->setText(temp);
     }
     else
     {
-        mWeaponLabel->setText("");
+        mWeapon->setText("");
         mWeapon->setIcon(QIcon());
     }
     if(invSize >= 4)
@@ -354,13 +411,17 @@ void MainWindow::updateInventory()
         Equipment myItem = mDGraphics->Hero->selectItem(invSize - 1);
         QString ItemName = QString::fromStdString(myItem.getName());
         mPotionicon = mDGraphics->getEquipmentGraphic(ItemName, T_Consumable);
-        mPotion1->setIcon(QIcon(QPixmap(mPotionicon).scaled(dim,dim)));
-        QString temp = " HP:"+ QString::number(mDGraphics->Hero->selectItem(3).getMaxHP());
-        mPotion1Label->setText(QString::fromStdString(mDGraphics->Hero->selectItem(3).getName())+temp);
+        // Scale icon to fit nicely within the button (leave space for text)
+        QSize iconSize = QSize(60, 60); // Fixed icon size for consistency
+        QPixmap potionPixmap = QPixmap(mPotionicon).scaled(iconSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        mPotion1->setIcon(QIcon(potionPixmap));
+        mPotion1->setIconSize(iconSize);
+        QString temp = QString::fromStdString(mDGraphics->Hero->selectItem(3).getName()) + "\nHP:"+ QString::number(mDGraphics->Hero->selectItem(3).getMaxHP());
+        mPotion1->setText(temp);
     }
     else
     {
-        mPotion1Label->setText("");
+        mPotion1->setText("");
         mPotion1->setIcon(QIcon());
     }
     if(invSize >= 5)
@@ -368,13 +429,17 @@ void MainWindow::updateInventory()
         Equipment myItem = mDGraphics->Hero->selectItem(invSize-1);
         QString ItemName = QString::fromStdString(myItem.getName());
         mPotionicon = mDGraphics->getEquipmentGraphic(ItemName, T_Consumable);
-        mPotion2->setIcon(QIcon(QPixmap(mPotionicon).scaled(dim,dim)));
-        QString temp = " HP:"+ QString::number(mDGraphics->Hero->selectItem(4).getMaxHP());
-        mPotion2Label->setText(QString::fromStdString(mDGraphics->Hero->selectItem(4).getName())+temp);
+        // Scale icon to fit nicely within the button (leave space for text)
+        QSize iconSize = QSize(60, 60); // Fixed icon size for consistency
+        QPixmap potionPixmap = QPixmap(mPotionicon).scaled(iconSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        mPotion2->setIcon(QIcon(potionPixmap));
+        mPotion2->setIconSize(iconSize);
+        QString temp = QString::fromStdString(mDGraphics->Hero->selectItem(4).getName()) + "\nHP:"+ QString::number(mDGraphics->Hero->selectItem(4).getMaxHP());
+        mPotion2->setText(temp);
     }
     else
     {
-        mPotion2Label->setText("");
+        mPotion2->setText("");
         mPotion2->setIcon(QIcon());
     }
     if(invSize >= 6)
@@ -382,16 +447,17 @@ void MainWindow::updateInventory()
         Equipment myItem = mDGraphics->Hero->selectItem(invSize-1);
         QString ItemName = QString::fromStdString(myItem.getName());
         mPotionicon = mDGraphics->getEquipmentGraphic(ItemName, T_Consumable);
-        mPotion3->setIcon(QIcon(QPixmap(mPotionicon).scaled(dim,dim)));
-        QString temp = " HP:"+ QString::number(mDGraphics->Hero->selectItem(5).getMaxHP());
-        mPotion3Label->setText(QString::fromStdString(mDGraphics->Hero->selectItem(5).getName())+temp);
+        // Scale icon to fit nicely within the button (leave space for text)
+        QSize iconSize = QSize(60, 60); // Fixed icon size for consistency
+        QPixmap potionPixmap = QPixmap(mPotionicon).scaled(iconSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        mPotion3->setIcon(QIcon(potionPixmap));
+        mPotion3->setIconSize(iconSize);
+        QString temp = QString::fromStdString(mDGraphics->Hero->selectItem(5).getName()) + "\nHP:"+ QString::number(mDGraphics->Hero->selectItem(5).getMaxHP());
+        mPotion3->setText(temp);
     }
     else
     {
-        Equipment myItem = mDGraphics->Hero->selectItem(invSize-1);
-        QString ItemName = QString::fromStdString(myItem.getName());
-        mPotionicon = mDGraphics->getEquipmentGraphic(ItemName, T_Consumable);
-        mPotion3Label->setText("");
+        mPotion3->setText("");
         mPotion3->setIcon(QIcon());
     }
     if(invSize >= 7)
@@ -399,13 +465,17 @@ void MainWindow::updateInventory()
         Equipment myItem = mDGraphics->Hero->selectItem(invSize-1);
         QString ItemName = QString::fromStdString(myItem.getName());
         mPotionicon = mDGraphics->getEquipmentGraphic(ItemName, T_Consumable);
-        mPotion4->setIcon(QIcon(QPixmap(mPotionicon).scaled(dim,dim)));
-        QString temp = " HP:"+ QString::number(mDGraphics->Hero->selectItem(6).getMaxHP());
-        mPotion4Label->setText(QString::fromStdString(mDGraphics->Hero->selectItem(6).getName())+temp);
+        // Scale icon to fit nicely within the button (leave space for text)
+        QSize iconSize = QSize(60, 60); // Fixed icon size for consistency
+        QPixmap potionPixmap = QPixmap(mPotionicon).scaled(iconSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        mPotion4->setIcon(QIcon(potionPixmap));
+        mPotion4->setIconSize(iconSize);
+        QString temp = QString::fromStdString(mDGraphics->Hero->selectItem(6).getName()) + "\nHP:"+ QString::number(mDGraphics->Hero->selectItem(6).getMaxHP());
+        mPotion4->setText(temp);
     }
     else
     {
-        mPotion4Label->setText("");
+        mPotion4->setText("");
         mPotion4->setIcon(QIcon());
     }
     if(invSize == 8)
@@ -413,13 +483,17 @@ void MainWindow::updateInventory()
         Equipment myItem = mDGraphics->Hero->selectItem(invSize-1);
         QString ItemName = QString::fromStdString(myItem.getName());
         mPotionicon = mDGraphics->getEquipmentGraphic(ItemName, T_Consumable);
-        mPotion5->setIcon(QIcon(QPixmap(mPotionicon).scaled(dim,dim)));
-        QString temp = " HP:"+ QString::number(mDGraphics->Hero->selectItem(7).getMaxHP());
-        mPotion5Label->setText(QString::fromStdString(mDGraphics->Hero->selectItem(7).getName())+temp);
+        // Scale icon to fit nicely within the button (leave space for text)
+        QSize iconSize = QSize(60, 60); // Fixed icon size for consistency
+        QPixmap potionPixmap = QPixmap(mPotionicon).scaled(iconSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        mPotion5->setIcon(QIcon(potionPixmap));
+        mPotion5->setIconSize(iconSize);
+        QString temp = QString::fromStdString(mDGraphics->Hero->selectItem(7).getName()) + "\nHP:"+ QString::number(mDGraphics->Hero->selectItem(7).getMaxHP());
+        mPotion5->setText(temp);
     }
     else
     {
-        mPotion5Label->setText("");
+        mPotion5->setText("");
         mPotion5->setIcon(QIcon());
     }
 
@@ -441,129 +515,7 @@ void MainWindow::updateInventory()
     mAPLabel->setText(temp);
 }
 
-void MainWindow::read(const QJsonObject &json)
-{
-    // Load basic game state
-    gState = json["state"].toInt();
-    mDefaultPath = json["defaultPath"].toString();
-    mLogContent = json["logContent"].toString();
-    gStep = json["step"].toInt();
-    gHeight = json["H"].toInt();
-    gWidth = json["W"].toInt();
-    gFlee = json["flee"].toBool();
-    
-    // Load Hero data if exists
-    if (json.contains("hero") && json["hero"].isObject()) {
-        QJsonObject heroData = json["hero"].toObject();
-        
-        // Clean up existing hero
-        if (mDGraphics && mDGraphics->Hero) {
-            delete mDGraphics->Hero;
-            mDGraphics->Hero = nullptr;
-        }
-        
-        // Create new hero
-        Character *hero = new Character();
-        hero->setName(heroData["name"].toString().toStdString());
-        hero->setHP(heroData["hp"].toInt());
-        hero->setMaxHP(heroData["maxHp"].toInt());
-        hero->setAP(heroData["ap"].toInt());
-        hero->heroRow = heroData["row"].toInt();
-        hero->heroCol = heroData["col"].toInt();
-        
-        // Load inventory
-        if (heroData.contains("inventory") && heroData["inventory"].isArray()) {
-            QJsonArray inventory = heroData["inventory"].toArray();
-            for (int i = 0; i < inventory.size(); ++i) {
-                QJsonObject itemData = inventory[i].toObject();
-                // Note: This is simplified - you'd need proper Equipment constructor
-                // Equipment item(itemData["name"].toString().toStdString(), 
-                //               itemData["ap"].toInt(), 
-                //               itemData["maxHp"].toInt(), 
-                //               true);
-                // hero->addToInventory(item);
-            }
-        }
-        
-        mDGraphics->Hero = hero;
-        mHeroName->setText("Name: " + QString::fromStdString(hero->getName()));
-        mHPBar->setValue(hero->getHP());
-    }
-    
-    // Load log entries
-    if (json.contains("logEntries") && json["logEntries"].isArray()) {
-        QJsonArray logEntries = json["logEntries"].toArray();
-        mLogEntries.clear();
-        for (int i = 0; i < logEntries.size(); ++i) {
-            mLogEntries.append(logEntries[i].toString());
-        }
-        mCurrentCommandIndex = json["currentCommandIndex"].toInt();
-        updateLogDisplay();
-    }
-    
-    // Update UI
-    updateInventory();
-    updateStatusBar();
-    
-    // Redraw graphics
-    if (mDGraphics) {
-        mDGraphics->drawMapFullStatic();
-        mDGraphics->drawPosition();
-    }
-}
 
-void MainWindow::write(QJsonObject &json) const
-{
-    // Basic game state
-    json["state"] = gState;
-    json["defaultPath"] = mDefaultPath;
-    json["logContent"] = mLogContent;
-    json["step"] = gStep;
-    json["H"] = gHeight;
-    json["W"] = gWidth;
-    json["flee"] = gFlee;
-    
-    // Save Hero data if exists
-    if (mDGraphics && mDGraphics->Hero) {
-        QJsonObject heroData;
-        heroData["name"] = QString::fromStdString(mDGraphics->Hero->getName());
-        heroData["hp"] = mDGraphics->Hero->getHP();
-        heroData["maxHp"] = mDGraphics->Hero->getMaxHP();
-        heroData["ap"] = mDGraphics->Hero->getAP();
-        heroData["row"] = mDGraphics->Hero->heroRow;
-        heroData["col"] = mDGraphics->Hero->heroCol;
-        
-        // Save inventory
-        QJsonArray inventory;
-        for (int i = 0; i < mDGraphics->Hero->inventorySize(); ++i) {
-            Equipment item = mDGraphics->Hero->selectItem(i);
-            QJsonObject itemData;
-            itemData["name"] = QString::fromStdString(item.getName());
-            itemData["ap"] = item.getAP();
-            itemData["maxHp"] = item.getMaxHP();
-            itemData["type"] = i; // Use index as type for now
-            inventory.append(itemData);
-        }
-        heroData["inventory"] = inventory;
-        
-        json["hero"] = heroData;
-    }
-    
-    // Save Generator/Map data if exists
-    if (Generated) {
-        QJsonObject generatorData;
-        // Add generator-specific data here when available
-        json["generator"] = generatorData;
-    }
-    
-    // Save log entries
-    QJsonArray logEntries;
-    for (const QString& entry : mLogEntries) {
-        logEntries.append(entry);
-    }
-    json["logEntries"] = logEntries;
-    json["currentCommandIndex"] = mCurrentCommandIndex;
-}
 
 bool MainWindow::eventFilter(QObject *obj, QEvent *ev)
 {
@@ -577,17 +529,16 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *ev)
 /*Widgets*/
 QWidget *MainWindow::setupContainerVertical()
 {
-    resize(1200,1000);
+    resize(1600,1000);  // Increased width to accommodate centered layout
     //setMinimumSize(1300,850);
     QMenuBar *mainMenuBar = menuBar();
+    mainMenuBar->setVisible(true); // Ensure menu bar is visible
 
     QMenu *fileMenu = mainMenuBar->addMenu("File");
-    QAction *newMenu= fileMenu->addAction("New game");
-    connect(newMenu, SIGNAL (triggered()),this, SLOT (newFileDialog()));
-    QAction *saveMenu= fileMenu->addAction("Save game");
-    connect(saveMenu, SIGNAL (triggered()),this, SLOT (saveFileDialog()));
-    QAction *loadMenu= fileMenu->addAction("Load game");
-    connect(loadMenu, SIGNAL (triggered()),this, SLOT (loadFileDialog()));
+    QAction *startMenu = fileMenu->addAction("Start Game");
+    connect(startMenu, SIGNAL (triggered()),this, SLOT (startGame()));
+    QAction *difficultyMenu = fileMenu->addAction("Select Difficulty");
+    connect(difficultyMenu, SIGNAL (triggered()),this, SLOT (selectDifficulty()));
     QAction *exitMenu= fileMenu->addAction("Exit game");
     connect(exitMenu, SIGNAL (triggered()),this, SLOT (exitDialog()));
     QMenu *settingsMenu = mainMenuBar->addMenu("Settings");
@@ -599,7 +550,10 @@ QWidget *MainWindow::setupContainerVertical()
     connect(setPWDMenu, SIGNAL (triggered()),this, SLOT (changePWD()));
     QWidget *center = new QWidget(this);
 
-    QWidget *statusBar = setupStatusBar();
+    // Create styled score display for top area
+    scoreLabel = new QLabel("<b><span style='color: #FFD700; font-size: 14px;'>🏆 Enemies: 0 | Score: 0</span></b>");
+    scoreLabel->setStyleSheet("QLabel { color: #FFD700; font-weight: bold; font-size: 14px; }");
+
     QWidget *inventory = setupInventory();
     QWidget *centerStack = setupContainerHorizontal();
 
@@ -613,35 +567,19 @@ QWidget *MainWindow::setupContainerVertical()
     /*            */
     /**************/
 
+    verticalLayout->setContentsMargins(0, 30, 0, 0); // Add top margin to avoid menu bar overlap
+    verticalLayout->addWidget(scoreLabel, 0, Qt::AlignCenter);  // Add centered score display at top
     verticalLayout->addWidget(inventory,0);
-    verticalLayout->addWidget(statusBar, 0);
-    verticalLayout->addWidget(centerStack,1);
+    verticalLayout->addWidget(centerStack,1);  // Give main area all remaining space
     return center;
 }
 
 QWidget *MainWindow::setupStatusBar()
 {
+    // Status bar widgets are now created in the constructor
+    // This function is kept for compatibility but widgets are already initialized
     QWidget *center = new QWidget(this);
-
-    QLabel *statusBarLabel = new QLabel("Status:", this);
-    statusBarLabel->setFrameStyle(QFrame::StyledPanel | QFrame::Sunken);
-    mHeroName = new QLabel(this);
-    mHPBar = new QProgressBar(this);
-    mHPBar->setRange(0,100);
-    mHPBar->text()+"HP:";
-    mHPBar->setOrientation(Qt::Horizontal);
-    mHPBar->setFormat("/100");
-    mAPLabel = new QLabel("AP:", this);
-
-    QHBoxLayout *horizontalLayout = new QHBoxLayout(center);
-    horizontalLayout->addWidget(mHeroName);
-    horizontalLayout->addWidget(statusBarLabel);
-    horizontalLayout->addWidget(mAPLabel);
-    horizontalLayout->addWidget(mHPBar);
-
-
     return center;
-
 }
 
 QWidget *MainWindow::setupLog()
@@ -653,6 +591,13 @@ QWidget *MainWindow::setupLog()
     
     // Set black background for the log
     mScrollLog->setStyleSheet("QTextEdit { background-color: black; color: white; }");
+    
+    // Set fixed width to keep it compact
+    mScrollLog->setFixedWidth(250);
+    
+    // Assign to global variable for fallback logging
+    extern QTextEdit *mScrollLog;
+    ::mScrollLog = this->mScrollLog;
     
     // Initialize the log with the first entry
     addLogEntry("Load a file to begin..", true); // This will be the current command initially
@@ -673,9 +618,24 @@ QWidget* MainWindow::setupContainerHorizontal()
     /*    /    /    */
     /*    /    /    */
     /****************/
-    horizontalLayout->addWidget(movementArrows,0);
-    horizontalLayout->addWidget(mapDisplay,2);
-    horizontalLayout->addWidget(scrollLog,1);
+    
+    // Add left spacer to center the main content
+    horizontalLayout->addStretch(1);
+    
+    // Add controls on the left side
+    horizontalLayout->addWidget(movementArrows, 0, Qt::AlignLeft);
+    
+    // Add main game area (map + log) in the center
+    QWidget *gameArea = new QWidget(this);
+    QHBoxLayout *gameLayout = new QHBoxLayout(gameArea);
+    gameLayout->setContentsMargins(10, 0, 10, 0); // Add some spacing around the game area
+    gameLayout->addWidget(mapDisplay, 0, Qt::AlignCenter);
+    gameLayout->addWidget(scrollLog, 0, Qt::AlignRight);
+    
+    horizontalLayout->addWidget(gameArea, 0, Qt::AlignCenter);
+    
+    // Add right spacer to balance the layout
+    horizontalLayout->addStretch(1);
 
     mapDisplay->setMinimumSize(gStep*gWidth, gStep*gHeight);
     return center;
@@ -687,7 +647,7 @@ QWidget *MainWindow::setupMapDisplay()
     setMinimumSize(PIXEL,PIXEL);
 
     QGraphicsScene *graphicsScene = new QGraphicsScene(this);
-    graphicsScene->setBackgroundBrush(QBrush(Qt::gray, Qt::SolidPattern));
+    graphicsScene->setBackgroundBrush(QBrush(QColor("#1a1a1a"), Qt::SolidPattern)); // Dark theme background
     graphicsScene->setSceneRect(0,0,PIXEL,PIXEL);
 
     mDGraphics = new Graphics();
@@ -705,6 +665,100 @@ QWidget *MainWindow::setupMapDisplay()
     return graphicsView;
 }
 
+QWidget* MainWindow::setupMovementArrows()
+{
+    QWidget* widget = new QWidget;
+    QVBoxLayout* mainLayout = new QVBoxLayout(widget);
+    mainLayout->setContentsMargins(10, 10, 10, 10); // Add padding around controls
+    
+    QLabel* label = new QLabel("Controls");
+    label->setAlignment(Qt::AlignCenter);
+    label->setStyleSheet("QLabel { font-weight: bold; font-size: 12pt; margin-bottom: 10px; }");
+    mainLayout->addWidget(label);
+    
+    QWidget* buttonContainer = new QWidget;
+    QGridLayout* layout = new QGridLayout(buttonContainer);
+    layout->setSpacing(5); // Add spacing between buttons
+
+    enum Buttons
+    {
+        GB_UP =4,
+        GB_LEFT = 6,
+        GB_RIGHT = 8,
+        GB_DOWN = 10,
+        GB_ACTION = 21,
+        GB_POTION = 22,
+        GB_FLEE = 23,
+        GB_NOthing = 24,
+    };
+
+    int counter = 0;
+    // Creating buttons and adding them to the grid layout
+    for (int row = 0; row < 9; ++row) {
+        for (int col = 0; col < 3; ++col) {
+            switch(counter)
+            {
+                case GB_UP:
+                {
+                QPushButton* buttonGB_UP = new QPushButton(QString("UP"), this);
+                    connect(buttonGB_UP, &QPushButton::clicked, layout, [this] { inputHandle(nullptr, B_Up); });
+                    layout->addWidget(buttonGB_UP, row, col);
+                    break;
+                }
+                case GB_LEFT:
+                {
+                    QPushButton* buttonGB_LEFT = new QPushButton(QString("LEFT"), this);
+                    connect(buttonGB_LEFT, &QPushButton::clicked, layout, [this] { inputHandle(nullptr, B_Left); });
+                    layout->addWidget(buttonGB_LEFT, row, col);
+                    break;
+                }
+                case GB_RIGHT:
+                {
+                    QPushButton* buttonGB_RIGHT= new QPushButton(QString("RIGHT"), this);
+                    connect(buttonGB_RIGHT, &QPushButton::clicked, layout, [this] { inputHandle(nullptr, B_Right); });
+                    layout->addWidget(buttonGB_RIGHT, row, col);
+                    break;
+                }
+                case GB_DOWN:
+                {
+                    QPushButton* buttonGB_DOWN = new QPushButton(QString("DOWN"), this);
+                    connect(buttonGB_DOWN, &QPushButton::clicked, layout, [this] { inputHandle(nullptr, B_Down); });
+                    layout->addWidget(buttonGB_DOWN, row, col);
+                    break;
+                }
+                case GB_ACTION:
+                {
+                    QPushButton* buttonGB_ACTION = new QPushButton(QString("ACTION"), this);
+                    connect(buttonGB_ACTION, &QPushButton::clicked, layout, [this] { inputHandle(nullptr, B_Atack); });
+                    layout->addWidget(buttonGB_ACTION, row, col);
+                    break;
+                }
+                case GB_POTION:
+                {
+                    QPushButton* buttonGB_POTION = new QPushButton(QString("POTION"), this);
+                    connect(buttonGB_POTION, &QPushButton::clicked, layout, [this] { inputHandle(nullptr, B_Potion); });
+                    layout->addWidget(buttonGB_POTION, row, col);
+                    break;
+                }
+                case GB_FLEE:
+                {
+                    QPushButton* buttonGB_FLEE = new QPushButton(tr("FLEE"), this);
+                    connect(buttonGB_FLEE, &QPushButton::clicked, this, [this] { inputHandle(nullptr, B_Flee); });
+                    layout->addWidget(buttonGB_FLEE, row, col);
+                    break;
+                }
+            }
+            ++counter;
+        }
+    }
+
+    layout->setAlignment(Qt::AlignCenter);
+    mainLayout->addWidget(buttonContainer);
+    mainLayout->addStretch(); // Add stretch to push controls to top
+    
+    return widget;
+}
+
 QWidget *MainWindow::setupInventory()
 {
     QWidget *widgetsContainer = new QWidget(this);
@@ -713,6 +767,7 @@ QWidget *MainWindow::setupInventory()
     QLabel *inventoryLabel = new QLabel("Inventory:", this);
     inventoryLabel->setFrameStyle(QFrame::StyledPanel | QFrame::Sunken);
 
+    // Create combined button containers with text and icons
     mWeapon = new QToolButton(this);
     mHelmet = new QToolButton(this);
     mArmor = new QToolButton(this);
@@ -721,33 +776,62 @@ QWidget *MainWindow::setupInventory()
     mPotion3 = new QToolButton(this);
     mPotion4 = new QToolButton(this);
     mPotion5 = new QToolButton(this);
-
-    mWeaponLabel = new QLabel(this);
-    mHelmetLabel = new QLabel(this);
-    mArmorLabel = new QLabel(this);
-    mPotion1Label = new QLabel(this);
-    mPotion2Label= new QLabel(this);
-    mPotion3Label  = new QLabel(this);
-    mPotion4Label = new QLabel(this);
-    mPotion5Label = new QLabel(this);
+    
+    // Set button properties for better icon display
+    mWeapon->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+    mHelmet->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+    mArmor->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+    mPotion1->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+    mPotion2->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+    mPotion3->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+    mPotion4->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+    mPotion5->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+    
+    // Set fixed sizes for consistent inventory display
+    mWeapon->setFixedSize(100, 100);
+    mHelmet->setFixedSize(100, 100);
+    mArmor->setFixedSize(100, 100);
+    mPotion1->setFixedSize(100, 100);
+    mPotion2->setFixedSize(100, 100);
+    mPotion3->setFixedSize(100, 100);
+    mPotion4->setFixedSize(100, 100);
+    mPotion5->setFixedSize(100, 100);
+    
+    // Connect potion buttons to use best potion available
+    connect(mPotion1, &QToolButton::clicked, this, [this]() { 
+        gValueButton = B_Potion; // Use general potion button which defaults to best potion
+        inputHandle(nullptr, B_Potion); 
+    });
+    connect(mPotion2, &QToolButton::clicked, this, [this]() { 
+        gValueButton = B_Potion; 
+        inputHandle(nullptr, B_Potion); 
+    });
+    connect(mPotion3, &QToolButton::clicked, this, [this]() { 
+        gValueButton = B_Potion; 
+        inputHandle(nullptr, B_Potion); 
+    });
+    connect(mPotion4, &QToolButton::clicked, this, [this]() { 
+        gValueButton = B_Potion; 
+        inputHandle(nullptr, B_Potion); 
+    });
+    connect(mPotion5, &QToolButton::clicked, this, [this]() { 
+        gValueButton = B_Potion; 
+        inputHandle(nullptr, B_Potion); 
+    });
 
     inventory->addWidget(inventoryLabel);
     inventory->addWidget(mWeapon);
-    inventory->addWidget(mWeaponLabel);
     inventory->addWidget(mHelmet);
-    inventory->addWidget(mHelmetLabel);
     inventory->addWidget(mArmor);
-    inventory->addWidget(mArmorLabel);
     inventory->addWidget(mPotion1);
-    inventory->addWidget(mPotion1Label);
     inventory->addWidget(mPotion2);
-    inventory->addWidget(mPotion2Label);
     inventory->addWidget(mPotion3);
-    inventory->addWidget(mPotion3Label);
     inventory->addWidget(mPotion4);
-    inventory->addWidget(mPotion4Label);
     inventory->addWidget(mPotion5);
-    inventory->addWidget(mPotion5Label);
+    
+    // Add consistent spacing between items
+    inventory->setSpacing(8);
+    inventory->setContentsMargins(10, 10, 10, 10);
 
     return widgetsContainer;
 }
@@ -756,11 +840,14 @@ QWidget *MainWindow::setupInventory()
 
 void MainWindow::exitDialog()
 {
+    qDebug() << "exitDialog() called";
     QMessageBox *myDialog = new QMessageBox(this);
     myDialog->setText("Are you sure to exit game");
     myDialog->setToolTip("Exit dialog");
     myDialog->exec();
+    qDebug() << "About to call close()";
     close();
+    qDebug() << "close() called successfully";
 }
 
 void MainWindow::configControllersDialog()
@@ -871,54 +958,69 @@ void MainWindow::changePWD()
 
 void MainWindow::idle()
 {
+    // Safety check: don't create dialogs if the window is being destroyed
+    if (isVisible() == false) {
+        qDebug() << "Skipping idle dialog - window not visible (likely being destroyed)";
+        return;
+    }
+    
     QMessageBox *myDialog = new QMessageBox(this);
     myDialog->setText("User idle due inactivity");
     myDialog->setToolTip("AFK");
     myDialog->exec();
 }
 
-void MainWindow::newFileDialog()
+
+
+void MainWindow::startGame()
 {
-    QDialog *myDialog = new QDialog(this);
-    //myDialog->setMinimumHeight(640);
-    //myDialog->setMinimumWidth(480);
-    myDialog->setWindowTitle("Choose Game Difficulty");
-
-    QDialogButtonBox *buttonBox = new QDialogButtonBox();
-    buttonBox->setParent(myDialog);
-    buttonBox->setContentsMargins(15,15,15,15);
-
-    QPushButton *buttonEasy = new QPushButton("Easy",this);
-    connect(buttonEasy, &QPushButton::clicked, myDialog, [this] { loadMapFile(EMapStart::E_Easy); });
-    connect(buttonEasy, &QPushButton::clicked, myDialog, &QDialog::close);
-
-    QPushButton *buttonMedium = new QPushButton("Medium", this);
-    connect(buttonMedium, &QPushButton::clicked, myDialog, [this] { loadMapFile(EMapStart::E_Medium); });
-    connect(buttonMedium, &QPushButton::clicked, myDialog, &QDialog::close);
-
-    QPushButton *buttonHard = new QPushButton("Hard", this);
-    connect(buttonHard, &QPushButton::clicked, myDialog, [this] { loadMapFile(EMapStart::E_Hard); });
-    connect(buttonHard, &QPushButton::clicked, myDialog, &QDialog::close);
-
-    QPushButton *buttonCustomLoad = new QPushButton("Load Custom", this);
-    connect(buttonCustomLoad, &QPushButton::clicked, myDialog, [this] { loadMapFile(EMapStart::E_Custom); });
-    connect(buttonCustomLoad, &QPushButton::clicked, myDialog, [this, myDialog] { myDialog->close(); });
-
-    //test->setMapping(loadMapFile());
-    //buttonPotion->setIcon(QPixmap(":/icons/yuv/v"));
-    //->setText("Potion");
-
-    buttonBox->addButton(buttonEasy, QDialogButtonBox::ActionRole);
-    buttonBox->addButton(buttonMedium, QDialogButtonBox::ActionRole);
-    buttonBox->addButton(buttonHard, QDialogButtonBox::ActionRole);
-    buttonBox->addButton(buttonCustomLoad, QDialogButtonBox::ActionRole);
-
-
-    //buttonBox->setGeometry(2100,40,200,50);
-    buttonBox->show();
-    myDialog->exec();
+    // Start the game with an easy level
+    loadMapFile(EMapStart::E_Easy);
 }
 
+void MainWindow::selectDifficulty()
+{
+    QDialog *difficultyDialog = new QDialog(this);
+    difficultyDialog->setWindowTitle("Select Difficulty Level");
+    difficultyDialog->setModal(true);
+    difficultyDialog->resize(300, 200);
+
+    QVBoxLayout *layout = new QVBoxLayout(difficultyDialog);
+
+    QLabel *titleLabel = new QLabel("Choose your difficulty level:");
+    titleLabel->setAlignment(Qt::AlignCenter);
+    layout->addWidget(titleLabel);
+
+    QPushButton *easyButton = new QPushButton("Easy (3 levels available)");
+    QPushButton *normalButton = new QPushButton("Normal (3 levels available)");
+    QPushButton *hardButton = new QPushButton("Hard (3 levels available)");
+    QPushButton *customButton = new QPushButton("Load Custom Level");
+
+    layout->addWidget(easyButton);
+    layout->addWidget(normalButton);
+    layout->addWidget(hardButton);
+    layout->addWidget(customButton);
+
+    // Connect buttons to loadMapFile with appropriate difficulty
+    connect(easyButton, &QPushButton::clicked, [this, difficultyDialog] { 
+        loadMapFile(EMapStart::E_Easy); 
+        difficultyDialog->close(); 
+    });
+    connect(normalButton, &QPushButton::clicked, [this, difficultyDialog] { 
+        loadMapFile(EMapStart::E_Medium); 
+        difficultyDialog->close(); 
+    });
+    connect(hardButton, &QPushButton::clicked, [this, difficultyDialog] { 
+        loadMapFile(EMapStart::E_Hard); 
+        difficultyDialog->close(); 
+    });
+    connect(customButton, &QPushButton::clicked, [this, difficultyDialog] { 
+        loadMapFile(EMapStart::E_Custom); 
+        difficultyDialog->close(); 
+    });
+
+    difficultyDialog->exec();
+}
 
 void MainWindow::loadMapFile(int mode)
 {
@@ -938,18 +1040,53 @@ void MainWindow::loadMapFile(int mode)
     switch(mode)
     {
     case EMapStart::E_Easy:
-        filePath = levelsEasy.at(randomValue);//"qrc:/Levels/easy_0.txt";
+        if (levelsEasy.size() > 0) {
+            randomValue = rand() % levelsEasy.size();
+            filePath = levelsEasy.at(randomValue);
+        } else {
+            addStyledLogEntry("No easy levels found!", false);
+            return;
+        }
         break;
     case EMapStart::E_Medium:
-        filePath = levelsMedium.at(randomValue);
+        if (levelsMedium.size() > 0) {
+            randomValue = rand() % levelsMedium.size();
+            filePath = levelsMedium.at(randomValue);
+        } else {
+            addStyledLogEntry("No normal levels found!", false);
+            return;
+        }
         break;
     case EMapStart::E_Hard:
-        filePath = levelsHard.at(randomValue);
+        if (levelsHard.size() > 0) {
+            randomValue = rand() % levelsHard.size();
+            filePath = levelsHard.at(randomValue);
+        } else {
+            addStyledLogEntry("No hard levels found!", false);
+            return;
+        }
         break;
     case EMapStart::E_Custom:
-        filePath = QFileDialog::getOpenFileName(this, "Search and load new input file", mDefaultPath);
+        filePath = QFileDialog::getOpenFileName(this, tr("Search and load new input file"), mDefaultPath, tr("Text Files (*.txt)"));
+        if (filePath.isEmpty()) {
+            addStyledLogEntry("No custom level selected!", false);
+            return;
+        }
         break;
     }
+    
+    // Log which level was selected
+    QString difficultyName;
+    switch(mode) {
+        case EMapStart::E_Easy: difficultyName = "Easy"; break;
+        case EMapStart::E_Medium: difficultyName = "Normal"; break;
+        case EMapStart::E_Hard: difficultyName = "Hard"; break;
+        case EMapStart::E_Custom: difficultyName = "Custom"; break;
+    }
+    
+    QString levelName = QFileInfo(filePath).baseName();
+    addStyledLogEntry(QString("Starting %1 level: %2").arg(difficultyName).arg(levelName), true);
+    
     QString ext = ".txt";
     QString subString = filePath.mid(filePath.size()-4, 4);
     //Verifying that the path is not empty and the directory exists
@@ -962,36 +1099,156 @@ void MainWindow::loadMapFile(int mode)
 
         // Reset game state before starting new game
         resetGameState();
+        qDebug() << "resetGameState() returned successfully";
         
         gStep = PIXEL/gWidth;
+        qDebug() << "gStep calculated successfully";
         /*Spawn all item locations in map*/
         Generated = new Generator;
-        mDGraphics->SetGenerator(Generated);
+        qDebug() << "New Generator created successfully";
+        
+        // Safety check before setting Generator
+        if (mDGraphics) {
+            qDebug() << "Setting Generator in Graphics";
+            mDGraphics->SetGenerator(Generated);
+            qDebug() << "Generator set successfully";
+        } else {
+            qDebug() << "ERROR: mDGraphics is null, cannot set Generator";
+            return;
+        }
+        
+        qDebug() << "About to call spawnMap";
         Generated->spawnMap();
+        qDebug() << "spawnMap completed";
 
         /*initialize hero with input information*/
+        qDebug() << "About to create new Hero";
         Character *hero = new Character;
-        mDGraphics->Hero = hero;
+        qDebug() << "Hero created successfully";
+        
+        // Safety check before setting Hero
+        if (mDGraphics) {
+            qDebug() << "Setting Hero in Graphics";
+            mDGraphics->Hero = hero;
+            qDebug() << "Hero set successfully";
+        } else {
+            qDebug() << "ERROR: mDGraphics is null, cannot set Hero";
+            delete hero; // Clean up the hero we just created
+            return;
+        }
+        
+        qDebug() << "About to set hero base values";
         hero->setBaseValues(gAP,gMaxHP);
-        mHPBar->setValue(hero->getHP());
+        qDebug() << "Hero base values set";
+        
+        // Skip HP bar update during reset to prevent widget access crashes
+        // The HP bar will be updated when the game actually starts running
+        qDebug() << "Skipping HP bar update during reset to prevent widget access crashes";
+        
         qDebug() << "hero setup done";
+
+        // Ensure the main window is visible and ready before showing input dialog
+        if (!isVisible()) {
+            qDebug() << "Main window not visible, showing it first";
+            show();
+        }
+        
+        // Force the window to be active and visible
+        activateWindow();
+        raise();
+        
+        // Force Qt to process events to ensure window is ready
+        QApplication::processEvents();
+        qDebug() << "Main window is ready for input dialog";
 
         bool ok = false;
         while(!ok)
         {
-            QString nameHero = QInputDialog::getText(this, tr("Input text only no more than 20 characters"),
-                                                     tr("Hero name:"), QLineEdit::Normal,
-                                                     "Douglass", &ok);
+            // More lenient check - only skip if window is completely invalid
+            if (!isVisible()) {
+                qDebug() << "Window not visible, skipping hero name input";
+                hero->setName("Player"); // Use default name
+                ok = true;
+                break;
+            }
+            
+            QString nameHero;
+            try {
+                nameHero = QInputDialog::getText(this, tr("Input text only no more than 20 characters"),
+                                                 tr("Hero name:"), QLineEdit::Normal,
+                                                 "Douglass", &ok);
+                qDebug() << "QInputDialog completed successfully";
+            } catch (...) {
+                qDebug() << "Exception in QInputDialog, using default name";
+                nameHero = "Player";
+                ok = true;
+            }
+            
+            qDebug() << "About to play begin sound";
             SoundEngine::PlaySoundByName("begin", 1);
+            qDebug() << "Begin sound played successfully";
+            
+            qDebug() << "About to set hero name";
             hero->setName(nameHero.toLocal8Bit().constData());
-            ok = false;
-            ok = GameManager::startMenu(*hero);
-            mHeroName->setText("Name: " + QString::fromStdString(mDGraphics->Hero->getName()));
-            mDGraphics->drawMapFullStatic();
-            mDGraphics->drawPosition();
-            updateInventory();
+            qDebug() << "Hero name set successfully";
+            
+            // Qt GUI version: Initialize hero with starting gear directly
+            // Instead of calling console version's GameManager::startMenu()
+            std::string heroName = hero->getName();
+            qDebug() << "Hero name retrieved:" << QString::fromStdString(heroName);
+            if((heroName.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ") != std::string::npos) || heroName.length() > 20)
+            {
+                addStyledLogEntry("Error name not valid,\nplease input no more than 20 chars \n& no special characters only letters\n", false);
+                ok = false;
+                continue;
+            }
+            
+            // Add starting gear to hero
+            QString welcomeMsg = QString(" Hi %1 now begin your journey to safety, take this gear\n ").arg(QString::fromStdString(heroName));
+            addStyledLogEntry(welcomeMsg, false);
+            
+            hero->addToInventory(Helmet("hat", 0, 1, true));
+            addStyledLogEntry("item: hat added to inventory \n", false);
+            
+            hero->addToInventory(Armor("cloth shirt", 0, 1, true));
+            addStyledLogEntry("item: cloth shirt added to inventory \n", false);
+            
+            hero->addToInventory(Weapon("knife", 1, 0, true));
+            addStyledLogEntry("item: knife added to inventory \n", false);
+            
+            qDebug() << "About to calculate hero stats";
+            hero->calculateStats();
+            qDebug() << "Hero stats calculated successfully";
+            ok = true; // Successfully initialized hero
         }
-    }
+        
+        qDebug() << "About to update hero name display";
+        if (mHeroName) {
+            mHeroName->setText("Name: " + QString::fromStdString(mDGraphics->Hero->getName()));
+            qDebug() << "Hero name display updated successfully";
+        } else {
+            qDebug() << "ERROR: mHeroName is null, cannot update hero name display";
+        }
+            
+            // Safety checks before drawing
+            qDebug() << "About to check graphics safety";
+            if (mDGraphics && mDGraphics->Generated && mDGraphics->Hero) {
+                qDebug() << "Graphics safety check passed, about to draw map";
+                mDGraphics->drawMapFullStatic();
+                qDebug() << "Map drawn successfully, about to draw position";
+                mDGraphics->drawPosition();
+                qDebug() << "Position drawn successfully";
+            } else {
+                qDebug() << "Safety check failed - not drawing graphics";
+                qDebug() << "mDGraphics:" << (mDGraphics ? "OK" : "NULL");
+                qDebug() << "Generated:" << (mDGraphics && mDGraphics->Generated ? "OK" : "NULL");
+                qDebug() << "Hero:" << (mDGraphics && mDGraphics->Hero ? "OK" : "NULL");
+            }
+            
+            qDebug() << "About to update inventory";
+            updateInventory();
+            qDebug() << "Inventory updated successfully";
+        }
     else
     {
         QMessageBox *myDialog = new QMessageBox(this);
@@ -1002,69 +1259,7 @@ void MainWindow::loadMapFile(int mode)
 
 }
 
-bool MainWindow::saveFileDialog(MainWindow::SaveFormat saveFormat) const
-{
-    QFile saveFile(saveFormat == Json
-        ? QStringLiteral("save.json")
-        : QStringLiteral("save.dat"));
 
-    if (!saveFile.open(QIODevice::WriteOnly)) {
-        qWarning("Couldn't create save file.");
-        QMessageBox *myDialog = new QMessageBox();
-        myDialog->setToolTip("Saving your file in JSON format");
-        myDialog->setText("Couldn't create save file.");
-        myDialog->exec();
-        return false;
-    }
-
-    QJsonObject gameObject;// fix this <-------- to make it work
-    write(gameObject);
-    QJsonDocument saveDoc(gameObject);
-    saveFile.write(saveDoc.toJson());
-    /*
-    saveFile.write(saveFormat == Json
-        ? saveDoc.toJson()
-        : saveDoc.toVariant());
-    */
-
-    QMessageBox *myDialog = new QMessageBox();
-    myDialog->setToolTip("Saving your file in JSON format");
-    myDialog->setText("File Saved!!");
-    myDialog->exec();
-
-    return true;
-}
-
-bool MainWindow::loadFileDialog(MainWindow::SaveFormat saveFormat)
-{
-    QFile loadFile(saveFormat == Json
-        ? QStringLiteral("save.json")
-        : QStringLiteral("save.dat"));
-
-    if (!loadFile.open(QIODevice::ReadOnly)) {
-        qWarning("Couldn't open save file.");
-        QMessageBox *myDialog = new QMessageBox();
-        myDialog->setToolTip("Loading your file in JSON format");
-        myDialog->setText("Couldn't open save file.");
-        myDialog->exec();
-        return false;
-    }
-
-    QByteArray saveData = loadFile.readAll();
-
-    QJsonDocument loadDoc(saveFormat == Json
-        ? QJsonDocument::fromJson(saveData)
-                              : QJsonDocument::fromVariant(saveData));
-
-    read(loadDoc.object());
-
-    QMessageBox *myDialog = new QMessageBox();
-    myDialog->setToolTip("Loading your file in JSON format");
-    myDialog->setText("File Loaded Sucessfully!!");
-    myDialog->exec();
-
-    return true;
-}
 
 void MainWindow::buttonPressed(const int &buttonType)
 {
@@ -1143,49 +1338,7 @@ void MainWindow::toggleInventory()
     addStyledLogEntry("=================", false);
 }
 
-void MainWindow::quickSave()
-{
-    addStyledLogEntry("Quick saving game...", true);
-    
-    // Use the same save system as regular save
-    QJsonObject saveData;
-    write(saveData);
-    
-    QFile saveFile("quicksave.json");
-    if (saveFile.open(QIODevice::WriteOnly)) {
-        QJsonDocument saveDoc(saveData);
-        saveFile.write(saveDoc.toJson());
-        saveFile.close();
-        
-        addStyledLogEntry("Quick save completed!", false);
-        SoundEngine::PlaySoundByName("ok", 1.0f);
-    } else {
-        addStyledLogEntry("Quick save failed!", false);
-    }
-}
 
-void MainWindow::quickLoad()
-{
-    addStyledLogEntry("Quick loading game...", true);
-    
-    QFile loadFile("quicksave.json");
-    if (!loadFile.open(QIODevice::ReadOnly)) {
-        addStyledLogEntry("No quick save file found!", false);
-        return;
-    }
-    
-    QByteArray saveData = loadFile.readAll();
-    QJsonDocument loadDoc = QJsonDocument::fromJson(saveData);
-    
-    // Clean up current state before loading
-    cleanupGameObjects();
-    
-    // Load the saved data
-    read(loadDoc.object());
-    
-    addStyledLogEntry("Quick load completed!", false);
-    SoundEngine::PlaySoundByName("ok", 1.0f);
-}
 
 void MainWindow::toggleMusic()
 {
@@ -1201,52 +1354,8 @@ void MainWindow::toggleMusic()
     }
 }
 
-// Auto-save system implementation
-void MainWindow::enableAutoSave(bool enabled)
-{
-    autoSaveEnabled = enabled;
-    if (enabled) {
-        autoSaveTimer->start(autoSaveIntervalMinutes * 60 * 1000);
-        addStyledLogEntry("Auto-save enabled", true);
-    } else {
-        autoSaveTimer->stop();
-        addStyledLogEntry("Auto-save disabled", true);
-    }
-}
 
-void MainWindow::performAutoSave()
-{
-    if (!autoSaveEnabled || !mDGraphics->Hero) return;
-    
-    addStyledLogEntry("Auto-saving game...", true);
-    
-    // Create save data
-    QJsonObject saveData;
-    write(saveData);
-    
-    // Save to file
-    QFile saveFile("autosave.json");
-    if (saveFile.open(QIODevice::WriteOnly)) {
-        QJsonDocument saveDoc(saveData);
-        saveFile.write(saveDoc.toJson());
-        saveFile.close();
-        
-        addStyledLogEntry("Auto-save completed", false);
-        SoundEngine::PlaySoundByName("ok", 0.5f);
-    } else {
-        addStyledLogEntry("Auto-save failed!", false);
-    }
-}
 
-void MainWindow::setAutoSaveInterval(int minutes)
-{
-    autoSaveIntervalMinutes = qMax(1, minutes); // Minimum 1 minute
-    if (autoSaveEnabled) {
-        autoSaveTimer->stop();
-        autoSaveTimer->start(autoSaveIntervalMinutes * 60 * 1000);
-    }
-    addStyledLogEntry(QString("Auto-save interval set to %1 minutes").arg(autoSaveIntervalMinutes), true);
-}
 
 // Settings menu implementation
 void MainWindow::showSettingsMenu()
@@ -1311,14 +1420,6 @@ void MainWindow::showSettingsMenu()
     QGroupBox* gameGroup = new QGroupBox("Game Settings");
     QVBoxLayout* gameLayout = new QVBoxLayout(gameGroup);
     
-    // Auto-save Interval
-    QHBoxLayout* autoSaveLayout = new QHBoxLayout();
-    autoSaveLayout->addWidget(new QLabel("Auto-save Interval (minutes):"));
-    QSpinBox* autoSaveSpinBox = new QSpinBox();
-    autoSaveSpinBox->setRange(1, 60);
-    autoSaveSpinBox->setValue(autoSaveIntervalMinutes);
-    autoSaveLayout->addWidget(autoSaveSpinBox);
-    gameLayout->addLayout(autoSaveLayout);
     
     mainLayout->addWidget(gameGroup);
     
@@ -1338,7 +1439,6 @@ void MainWindow::showSettingsMenu()
         sfxVolume = sfxVolSlider->value() / 100.0f;
         screenShakeEnabled = screenShakeCheck->isChecked();
         damageFlashEnabled = damageFlashCheck->isChecked();
-        autoSaveIntervalMinutes = autoSaveSpinBox->value();
         
         applySettings();
         settingsDialog.accept();
@@ -1356,8 +1456,6 @@ void MainWindow::applySettings()
     SoundEngine::SetMusicVolume(musicVolume);
     SoundEngine::SetSFXVolume(sfxVolume);
     
-    // Apply auto-save settings
-    setAutoSaveInterval(autoSaveIntervalMinutes);
     
     addStyledLogEntry("Settings applied successfully!", true);
 }
@@ -1391,10 +1489,7 @@ void MainWindow::showHelpMenu()
         "<h3>Quick Actions:</h3>"
         "<ul>"
         "<li><b>I</b> - Show Inventory</li>"
-        "<li><b>S</b> - Quick Save</li>"
-        "<li><b>L</b> - Quick Load</li>"
         "<li><b>M</b> - Toggle Music</li>"
-        "<li><b>A</b> - Toggle Auto-save</li>"
         "</ul>"
         
         "<h3>Menus:</h3>"
@@ -1407,7 +1502,6 @@ void MainWindow::showHelpMenu()
         "<ul>"
         "<li><b>Screen Shake</b> - Visual feedback for combat</li>"
         "<li><b>Damage Flash</b> - Red flash when taking damage</li>"
-        "<li><b>Auto-save</b> - Automatically saves progress</li>"
         "<li><b>Enhanced Audio</b> - Better sound effects and music</li>"
         "<li><b>Styled Log</b> - Current command highlighted in white</li>"
         "</ul>"
@@ -1435,35 +1529,42 @@ void MainWindow::resetGameState()
 {
     qDebug() << "Resetting game state...";
     
-    // Clean up existing game objects
-    cleanupGameObjects();
-    
-    // Reset global state variables
-    gState = S_Normal;
-    gFlee = true;
-    mLogContent = "";
-    
-    // Clear log entries
+    // Reset member variables BEFORE cleanup to avoid accessing them after hide()
+    qDebug() << "Clearing member variables before cleanup";
     mLogEntries.clear();
     mCurrentCommandIndex = -1;
-    addStyledLogEntry("Game state reset - Ready for new game", true);
     
-    // Reset UI elements
-    if (mHPBar) mHPBar->setValue(0);
-    if (mHeroName) mHeroName->setText("Name: --");
-    if (mArmorLabel) mArmorLabel->setText("");
-    if (mWeaponLabel) mWeaponLabel->setText("");
-    if (mPotion1Label) mPotion1Label->setText("");
-    if (mPotion2Label) mPotion2Label->setText("");
-    if (mPotion3Label) mPotion3Label->setText("");
+    // Clean up existing game objects
+    cleanupGameObjects();
+    qDebug() << "cleanupGameObjects() returned successfully";
+    
+    // Reset global state variables
+    qDebug() << "About to reset global state variables";
+    qDebug() << "Setting gState to S_Normal";
+    gState = S_Normal;
+    qDebug() << "Setting gFlee to true";
+    gFlee = true;
+    qDebug() << "Clearing mLogContent";
+    mLogContent = "";
+    
+    // Note: addStyledLogEntry removed here to prevent crash after cleanup
+    // The log will be updated when a new game starts
+    
+    // Reset UI elements safely - skip if widgets may be invalid after cleanup
+    qDebug() << "Skipping UI reset after cleanup to prevent widget access crashes";
+    // Note: UI elements will be reset when a new game starts instead
     
     // Clear graphics scene
     if (mDGraphics && mDGraphics->scene()) {
         mDGraphics->clearSceneItems();
     }
     
-    // Update status bar
-    updateStatusBar();
+    // Skip updateStatusBar() call after cleanup to prevent accessing deleted Hero
+    qDebug() << "Skipping status bar update after cleanup to prevent Hero access";
+    
+    // Reapply the dark theme to ensure UI styling is maintained
+    applyDarkTheme();
+    qDebug() << "Dark theme reapplied after game reset";
     
     qDebug() << "Game state reset completed";
 }
@@ -1472,14 +1573,59 @@ void MainWindow::cleanupGameObjects()
 {
     qDebug() << "Cleaning up game objects...";
     
+    // Force Qt to process all pending events before cleanup
+    QApplication::processEvents();
+    qDebug() << "Qt events processed before cleanup";
+    
+    // Note: Removed this->hide() call as it may cause Qt to start destruction process
+    
+    // Note: Do NOT nullify global pointers during game reset - they should remain valid
+    // Only nullify them during actual MainWindow destruction
+    qDebug() << "Keeping global MainWindow and mScrollLog pointers valid for logging";
+    
+    // Clear graphics scene first to avoid double deletion
+    if (mDGraphics && mDGraphics->scene()) {
+        // Nullify the Generator pointer in Graphics before clearing scene
+        mDGraphics->Generated = nullptr;
+        qDebug() << "Graphics Generator pointer nullified before scene clear";
+        mDGraphics->clearSceneItems();
+    }
+    
     // Stop any ongoing animations first
     if (mDGraphics && Graphics::instance) {
         Graphics::instance->stopAllAnimations();
     }
     
-    // Clear graphics scene first to avoid double deletion
-    if (mDGraphics && mDGraphics->scene()) {
-        mDGraphics->clearSceneItems();
+    // Nullify the static Graphics pointer to prevent access during destruction
+    Graphics::instance = nullptr;
+    qDebug() << "Static Graphics pointer nullified";
+    
+    // Stop the idle timer to prevent it from firing during destruction
+    if (timer) {
+        timer->stop();
+        qDebug() << "Idle timer stopped";
+    }
+    
+    // Safely clean up UI elements that might cause destruction issues
+    try {
+        // Note: Do NOT clear stylesheets during game reset - only during actual destruction
+        // The stylesheet should remain applied for the UI to look correct
+        qDebug() << "Skipping stylesheet clear during game reset to maintain UI appearance";
+        
+        if (statusBar) {
+            qDebug() << "Cleaning up status bar";
+            // Don't delete statusBar - it's owned by QMainWindow
+        }
+        if (controlsLabel) {
+            qDebug() << "Cleaning up controls label";
+            // Don't delete controlsLabel - it's owned by statusBar
+        }
+        if (scoreLabel) {
+            qDebug() << "Cleaning up score label";
+            // Don't delete scoreLabel - it's owned by parent widget
+        }
+    } catch (...) {
+        qDebug() << "Exception during UI cleanup";
     }
     
     // Clean up graphics equipment items safely (they should already be removed from scene)
@@ -1530,20 +1676,85 @@ void MainWindow::cleanupGameObjects()
         
         qDebug() << "About to call delete Generated...";
         try {
-            // Try a safer approach - just nullify for now to avoid crash
-            // TODO: Investigate why Generator deletion crashes
-            qDebug() << "Skipping Generator deletion to avoid crash - will investigate";
-            // delete Generated;
-            Generated = nullptr;
-            qDebug() << "Generator pointer nullified (not deleted)";
+            // TEMPORARY: Skip deletion to test if this fixes the crash
+            // This is a memory leak but will help us identify the root cause
+            qDebug() << "Skipping Generator deletion to test crash fix";
+            Generated = nullptr; // Just nullify the pointer
+            qDebug() << "Generator pointer nullified (not deleted - temporary fix)";
+        } catch (const std::exception& e) {
+            qDebug() << "Standard exception caught during Generator deletion:" << e.what();
         } catch (...) {
-            qDebug() << "Exception caught during Generator deletion";
+            qDebug() << "Unknown exception caught during Generator deletion";
         }
         
         qDebug() << "Generator cleanup completed";
     }
     
     qDebug() << "Game objects cleanup completed";
+    
+    // Force Qt to process all pending events after cleanup
+    QApplication::processEvents();
+    qDebug() << "Qt events processed after cleanup";
+}
+
+void MainWindow::onEnemyDefeated(const QString& enemyName, int enemyDifficulty)
+{
+    qDebug() << "onEnemyDefeated called with enemy:" << enemyName << "difficulty:" << enemyDifficulty;
+    
+    try {
+        enemiesDefeated++;
+        qDebug() << "Enemies defeated incremented to:" << enemiesDefeated;
+        
+        // Calculate score based on enemy difficulty
+        int baseScore = 10;
+        int difficultyMultiplier = enemyDifficulty;
+        int enemyScore = baseScore * difficultyMultiplier;
+        totalScore += enemyScore;
+        qDebug() << "Score calculated:" << enemyScore << "Total score:" << totalScore;
+        
+        // Determine difficulty level name
+        QString difficultyLevel;
+        if (enemyDifficulty <= 2) difficultyLevel = "Very Easy";
+        else if (enemyDifficulty <= 4) difficultyLevel = "Easy";
+        else if (enemyDifficulty <= 6) difficultyLevel = "Medium";
+        else if (enemyDifficulty <= 8) difficultyLevel = "Hard";
+        else if (enemyDifficulty <= 9) difficultyLevel = "Very Hard";
+        else difficultyLevel = "Boss";
+        qDebug() << "Difficulty level determined:" << difficultyLevel;
+        
+        // Log the defeat with difficulty level
+        QString defeatMessage = QString("Defeated %1 (%2)! (+%3 points) | Total: %4 enemies, Score: %5")
+            .arg(enemyName)
+            .arg(difficultyLevel)
+            .arg(enemyScore)
+            .arg(enemiesDefeated)
+            .arg(totalScore);
+        qDebug() << "About to add styled log entry:" << defeatMessage;
+        addStyledLogEntry(defeatMessage, false);
+        qDebug() << "Styled log entry added successfully";
+        
+        // Update score display
+        qDebug() << "About to update score display";
+        updateScoreDisplay();
+        qDebug() << "Score display updated successfully";
+        
+        qDebug() << "onEnemyDefeated completed successfully";
+    } catch (const std::exception& e) {
+        qDebug() << "Exception in onEnemyDefeated:" << e.what();
+    } catch (...) {
+        qDebug() << "Unknown exception in onEnemyDefeated";
+    }
+}
+
+void MainWindow::updateScoreDisplay()
+{
+    // Update the styled score label with enhanced graphics
+    QString scoreText = QString("<b><span style='color: #FFD700; font-size: 14px;'>🏆 Enemies: %1 | Score: %2</span></b>")
+        .arg(enemiesDefeated)
+        .arg(totalScore);
+    scoreLabel->setText(scoreText);
+    
+    qDebug() << "Score display updated - Enemies:" << enemiesDefeated << "Score:" << totalScore;
 }
 
 void MainWindow::updateStatusBar()
@@ -1552,29 +1763,470 @@ void MainWindow::updateStatusBar()
     
     if (mDGraphics && mDGraphics->Hero) {
         qDebug() << "Updating status bar with Hero data";
-        // Update health
-        QString healthText = QString("Health: %1/%2")
-            .arg(mDGraphics->Hero->getHP())
-            .arg(mDGraphics->Hero->getMaxHP());
-        healthLabel->setText(healthText);
         
-        // Update position
-        QString positionText = QString("Position: %1, %2")
-            .arg(mDGraphics->Hero->heroRow)
-            .arg(mDGraphics->Hero->heroCol);
-        positionLabel->setText(positionText);
+        // Check for available potions and show key bindings
+        QString potionKeys = "";
+        bool hasPotions = false;
         
-        // Update auto-save status
-        QString autoSaveText = QString("Auto-save: %1")
-            .arg(autoSaveEnabled ? "ON" : "OFF");
-        autoSaveLabel->setText(autoSaveText);
+        // Check inventory for potions - be more careful with bounds checking
+        int inventorySize = mDGraphics->Hero->inventorySize();
+        qDebug() << "Hero inventory size:" << inventorySize;
+        
+        // Check each inventory slot for potions
+        for (int i = 0; i < inventorySize; ++i) {
+            try {
+                Equipment item = mDGraphics->Hero->selectItem(i);
+                QString itemName = QString::fromStdString(item.getName());
+                qDebug() << "Checking item at index" << i << ":" << itemName;
+                
+                // Check if this is a potion (look for "potion" in the name)
+                if (itemName.toLower().contains("potion")) {
+                    if (!potionKeys.isEmpty()) {
+                        potionKeys += " | ";
+                    }
+                    // Map inventory indices to potion button numbers
+                    // Inventory slots 3,4,5,6,7 correspond to potion buttons 1,2,3,4,5
+                    int potionNumber = -1;
+                    if (i == 3) potionNumber = 1;
+                    else if (i == 4) potionNumber = 2;
+                    else if (i == 5) potionNumber = 3;
+                    else if (i == 6) potionNumber = 4;
+                    else if (i == 7) potionNumber = 5;
+                    
+                    if (potionNumber > 0) {
+                        potionKeys += QString("%1").arg(potionNumber);
+                        hasPotions = true;
+                        qDebug() << "Found potion at inventory index" << i << "-> potion button" << potionNumber;
+                    }
+                }
+            } catch (...) {
+                qDebug() << "Error accessing item at index" << i;
+                continue;
+            }
+        }
+        
+        if (hasPotions) {
+            qDebug() << "Set potion keys:" << potionKeys;
+        } else {
+            qDebug() << "No potions found";
+        }
+        
+        // Update controls with potion information
+        updateControlsDisplay(hasPotions, potionKeys);
         
         qDebug() << "Status bar updated successfully";
     } else {
         qDebug() << "Hero is null, setting default status bar values";
-        healthLabel->setText("Health: --/--");
-        positionLabel->setText("Position: --, --");
+        
+        // Update controls without potion info
+        updateControlsDisplay(false, "");
     }
     
     qDebug() << "updateStatusBar() completed";
+}
+
+void MainWindow::updateControlsDisplay(bool hasPotions, const QString& potionKeys)
+{
+    QString controlsText = "Controls: WASD=Move | X=Attack | F=Flee | Z=Look";
+    
+    if (hasPotions) {
+        controlsText += " | Potions: " + potionKeys;
+    }
+    
+    controlsLabel->setText(controlsText);
+    qDebug() << "Controls updated:" << controlsText;
+}
+
+void MainWindow::applyDarkTheme()
+{
+    // Modern dark theme color palette
+    QString darkBackground = "#1a1a1a";      // Very dark gray
+    QString darkerBackground = "#0d0d0d";    // Almost black
+    QString cardBackground = "#2d2d2d";      // Dark gray for cards/panels
+    QString accentColor = "#4a9eff";         // Modern blue accent
+    QString goldenAccent = "#FFD700";        // Golden accent (matching score)
+    QString warmRed = "#FF4444";            // Warm red for health bar
+    QString warmRedLight = "#FF6666";       // Lighter warm red for gradient
+    QString textColor = "#e0e0e0";           // Light gray text
+    QString mutedText = "#a0a0a0";           // Muted text
+    QString borderColor = "#404040";         // Subtle borders
+    
+    // Main window styling
+    this->setStyleSheet(QString(""
+        "QMainWindow {"
+        "    background-color: %1;"
+        "    color: %2;"
+        "}"
+        ""
+        "QWidget {"
+        "    background-color: %1;"
+        "    color: %2;"
+        "    font-family: 'Segoe UI', Arial, sans-serif;"
+        "    font-size: 9pt;"
+        "}"
+        ""
+        "QToolButton {"
+        "    background-color: %3;"
+        "    color: %2;"
+        "    border: 2px solid %4;"
+        "    border-radius: 8px;"
+        "    padding: 4px;"
+        "    font-weight: bold;"
+        "    width: 100px;"
+        "    height: 100px;"
+        "    font-size: 7pt;"
+        "    text-align: center;"
+        "}"
+        ""
+        "QToolButton:hover {"
+        "    background-color: %5;"
+        "    border-color: %6;"
+        "}"
+        ""
+        "QToolButton:pressed {"
+        "    background-color: %7;"
+        "    border-color: %6;"
+        "}"
+        ""
+        "QToolButton:disabled {"
+        "    background-color: %8;"
+        "    color: %9;"
+        "    border-color: %8;"
+        "}"
+        ""
+        "QLabel {"
+        "    color: %2;"
+        "    background-color: transparent;"
+        "    padding: 4px;"
+        "}"
+        ""
+        "QStatusBar {"
+        "    background-color: %3;"
+        "    color: %2;"
+        "    border-top: 1px solid %4;"
+        "    padding: 4px;"
+        "}"
+        ""
+        "QStatusBar::item {"
+        "    border: none;"
+        "    padding: 2px 8px;"
+        "}"
+        ""
+        "QProgressBar {"
+        "    background-color: %8;"
+        "    border: 1px solid %4;"
+        "    border-radius: 4px;"
+        "    text-align: center;"
+        "    color: %2;"
+        "}"
+        ""
+        "QProgressBar::chunk {"
+        "    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, "
+        "        stop:0 %11, stop:1 %12);"
+        "    border-radius: 3px;"
+        "}"
+        ""
+        "QPushButton {"
+        "    background-color: %3;"
+        "    color: %2;"
+        "    border: 2px solid %4;"
+        "    border-radius: 6px;"
+        "    padding: 6px 12px;"
+        "    font-weight: bold;"
+        "    min-height: 20px;"
+        "}"
+        ""
+        "QPushButton:hover {"
+        "    background-color: %5;"
+        "    border-color: %6;"
+        "}"
+        ""
+        "QPushButton:pressed {"
+        "    background-color: %7;"
+        "    border-color: %6;"
+        "}"
+        ""
+        "QFrame {"
+        "    background-color: %3;"
+        "    border: 1px solid %4;"
+        "    border-radius: 6px;"
+        "}"
+        ""
+        "QScrollArea {"
+        "    background-color: %1;"
+        "    border: 1px solid %4;"
+        "    border-radius: 6px;"
+        "}"
+        ""
+        "QTextEdit {"
+        "    background-color: %1;"
+        "    color: %2;"
+        "    border: 1px solid %4;"
+        "    border-radius: 6px;"
+        "    padding: 8px;"
+        "    font-family: 'Consolas', 'Monaco', monospace;"
+        "    font-size: 9pt;"
+        "}"
+        ""
+        "QComboBox {"
+        "    background-color: %3;"
+        "    color: %2;"
+        "    border: 1px solid %4;"
+        "    border-radius: 4px;"
+        "    padding: 4px;"
+        "    min-width: 80px;"
+        "}"
+        ""
+        "QComboBox::drop-down {"
+        "    border: none;"
+        "}"
+        ""
+        "QComboBox::down-arrow {"
+        "    image: none;"
+        "    border-left: 5px solid transparent;"
+        "    border-right: 5px solid transparent;"
+        "    border-top: 5px solid %2;"
+        "}"
+        ""
+        "QComboBox QAbstractItemView {"
+        "    background-color: %3;"
+        "    color: %2;"
+        "    border: 1px solid %4;"
+        "    selection-background-color: %5;"
+        "}"
+        ""
+        "QCheckBox {"
+        "    color: %2;"
+        "    spacing: 8px;"
+        "}"
+        ""
+        "QCheckBox::indicator {"
+        "    width: 16px;"
+        "    height: 16px;"
+        "    border: 2px solid %4;"
+        "    border-radius: 3px;"
+        "    background-color: %3;"
+        "}"
+        ""
+        "QCheckBox::indicator:checked {"
+        "    background-color: %6;"
+        "    border-color: %6;"
+        "}"
+        ""
+        "QCheckBox::indicator:hover {"
+        "    border-color: %6;"
+        "}"
+        ""
+        "QSpinBox {"
+        "    background-color: %3;"
+        "    color: %2;"
+        "    border: 1px solid %4;"
+        "    border-radius: 4px;"
+        "    padding: 4px;"
+        "    min-width: 60px;"
+        "}"
+        ""
+        "QSpinBox::up-button, QSpinBox::down-button {"
+        "    background-color: %5;"
+        "    border: 1px solid %4;"
+        "    width: 16px;"
+        "}"
+        ""
+        "QSpinBox::up-button:hover, QSpinBox::down-button:hover {"
+        "    background-color: %6;"
+        "}"
+        ""
+        "QLineEdit {"
+        "    background-color: %3;"
+        "    color: %2;"
+        "    border: 1px solid %4;"
+        "    border-radius: 4px;"
+        "    padding: 4px;"
+        "}"
+        ""
+        "QLineEdit:focus {"
+        "    border-color: %6;"
+        "}"
+        ""
+        "QMenuBar {"
+        "    background-color: %3;"
+        "    color: %2;"
+        "    border-bottom: 1px solid %4;"
+        "    font-weight: bold;"
+        "    font-size: 10pt;"
+        "}"
+        ""
+        "QMenuBar::item {"
+        "    background-color: transparent;"
+        "    padding: 6px 12px;"
+        "    color: %2;"
+        "    border-radius: 3px;"
+        "}"
+        ""
+        "QMenuBar::item:selected {"
+        "    background-color: %5;"
+        "    color: %1;"
+        "}"
+        ""
+        "QMenuBar::item:hover {"
+        "    background-color: %5;"
+        "    color: %1;"
+        "}"
+        ""
+        "QMenu {"
+        "    background-color: %3;"
+        "    color: %2;"
+        "    border: 1px solid %4;"
+        "    border-radius: 6px;"
+        "    padding: 4px;"
+        "}"
+        ""
+        "QMenu::item {"
+        "    background-color: transparent;"
+        "    padding: 6px 12px;"
+        "    border-radius: 3px;"
+        "}"
+        ""
+        "QMenu::item:selected {"
+        "    background-color: %5;"
+        "    color: %1;"
+        "}"
+        ""
+        "QMenu::item:hover {"
+        "    background-color: %5;"
+        "    color: %1;"
+        "}"
+        ""
+        "QDialog {"
+        "    background-color: %1;"
+        "    color: %2;"
+        "}"
+        ""
+        "QMessageBox {"
+        "    background-color: %1;"
+        "    color: %2;"
+        "}"
+        ""
+        "QTabWidget::pane {"
+        "    background-color: %3;"
+        "    border: 1px solid %4;"
+        "    border-radius: 6px;"
+        "}"
+        ""
+        "QTabBar::tab {"
+        "    background-color: %8;"
+        "    color: %9;"
+        "    border: 1px solid %4;"
+        "    padding: 6px 12px;"
+        "    margin-right: 2px;"
+        "}"
+        ""
+        "QTabBar::tab:selected {"
+        "    background-color: %3;"
+        "    color: %2;"
+        "    border-bottom-color: %3;"
+        "}"
+        ""
+        "QTabBar::tab:hover {"
+        "    background-color: %5;"
+        "    color: %2;"
+        "}"
+        ""
+        "QSplitter::handle {"
+        "    background-color: %4;"
+        "}"
+        ""
+        "QSplitter::handle:horizontal {"
+        "    width: 2px;"
+        "}"
+        ""
+        "QSplitter::handle:vertical {"
+        "    height: 2px;"
+        "}"
+        ""
+        "QGroupBox {"
+        "    background-color: %3;"
+        "    color: %2;"
+        "    border: 1px solid %4;"
+        "    border-radius: 6px;"
+        "    margin-top: 8px;"
+        "    padding-top: 8px;"
+        "    font-weight: bold;"
+        "}"
+        ""
+        "QGroupBox::title {"
+        "    subcontrol-origin: margin;"
+        "    left: 8px;"
+        "    padding: 0 4px 0 4px;"
+        "    color: %6;"
+        "}"
+        ""
+        "QSlider::groove:horizontal {"
+        "    background-color: %8;"
+        "    height: 6px;"
+        "    border-radius: 3px;"
+        "}"
+        ""
+        "QSlider::handle:horizontal {"
+        "    background-color: %6;"
+        "    width: 18px;"
+        "    height: 18px;"
+        "    border-radius: 9px;"
+        "    margin: -6px 0;"
+        "}"
+        ""
+        "QSlider::handle:horizontal:hover {"
+        "    background-color: %10;"
+        "}"
+        ""
+        "QSlider::sub-page:horizontal {"
+        "    background-color: %6;"
+        "    border-radius: 3px;"
+        "}"
+        ""
+        "QSlider::add-page:horizontal {"
+        "    background-color: %8;"
+        "    border-radius: 3px;"
+        "}"
+    ).arg(darkBackground)      // %1
+     .arg(textColor)          // %2
+     .arg(cardBackground)     // %3
+     .arg(borderColor)        // %4
+     .arg(accentColor)        // %5
+     .arg(goldenAccent)       // %6
+     .arg(darkerBackground)   // %7
+     .arg("#404040")          // %8 - darker gray
+     .arg(mutedText)          // %9
+     .arg("#FFA500")          // %10 - orange accent
+     .arg(warmRed)            // %11 - warm red
+     .arg(warmRedLight));     // %12 - lighter warm red
+    
+    // Apply special styling to specific elements
+    if (scoreLabel) {
+        scoreLabel->setStyleSheet(QString(""
+            "QLabel {"
+            "    background-color: rgba(0, 0, 0, 0.8);"
+            "    color: %1;"
+            "    padding: 8px 12px;"
+            "    border-radius: 8px;"
+            "    border: 1px solid %2;"
+            "    font-weight: bold;"
+            "    font-size: 14px;"
+            "}"
+        ).arg(goldenAccent).arg(borderColor));
+    }
+    
+    if (controlsLabel) {
+        controlsLabel->setStyleSheet(QString(""
+            "QLabel {"
+            "    color: %1;"
+            "    background-color: transparent;"
+            "    padding: 4px 8px;"
+            "    font-size: 10pt;"
+            "    font-weight: normal;"
+            "}"
+        ).arg(mutedText));
+    }
+    
+    qDebug() << "Dark theme applied successfully";
 }

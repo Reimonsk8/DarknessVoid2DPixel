@@ -1,6 +1,7 @@
 ﻿#include <time.h>
 #include <vector>
 #include <iostream>
+#include <atomic>
 #include "common.h"
 #include "Generator.h"
 #include <QVector>
@@ -29,17 +30,18 @@ Generator::Generator()
         int maxHp;
         int flee;
         int population;
+        int difficulty; // Difficulty level for scoring (1-10)
     } enemyConfigs[] = {
-        {"skeleton", 10, 50, 6, 10},
-        {"ghost", 15, 100, 9, 10},
-        {"demon", 26, 200, 6, 5},
-        {"troll", 20, 300, 3, 4},  // 4%
-        {"centaur", 20, 150, 8, 6}, // 7%
-        {"bat", 7, 30, 10,10},    // 3%
-        {"minotaur", 25, 200, 4, 4}, // 5%
-        {"gryphon", 35, 180, 9, 4}, // 4%
-        {"reaper", 50, 250, 9, 2},  // 2%
-        {"dragon", 100, 700, 10, 1} // 1%
+        {"skeleton", 10, 50, 6, 10, 2},     // Easy enemy
+        {"ghost", 15, 100, 9, 10, 3},       // Easy-Medium enemy
+        {"demon", 26, 200, 6, 5, 6},        // Hard enemy
+        {"troll", 20, 300, 3, 4, 5},        // Medium-Hard enemy
+        {"centaur", 20, 150, 8, 6, 4},      // Medium enemy
+        {"bat", 7, 30, 10, 10, 1},          // Very Easy enemy
+        {"minotaur", 25, 200, 4, 4, 6},     // Hard enemy
+        {"gryphon", 35, 180, 9, 4, 7},      // Very Hard enemy
+        {"reaper", 50, 250, 9, 2, 9},       // Extreme enemy
+        {"dragon", 100, 700, 10, 1, 10}     // Boss Level enemy
     };
     int enemyConfigsSize = sizeof(enemyConfigs) / sizeof(enemyConfigs[0]);
     for (int enemyTypeIndex = 0; enemyTypeIndex < enemyConfigsSize; ++enemyTypeIndex)
@@ -49,7 +51,8 @@ Generator::Generator()
             listEnemies.push_back(Enemy(enemyConfigs[enemyTypeIndex].name,
                                         enemyConfigs[enemyTypeIndex].ap,
                                         enemyConfigs[enemyTypeIndex].maxHp,
-                                        enemyConfigs[enemyTypeIndex].flee));
+                                        enemyConfigs[enemyTypeIndex].flee,
+                                        enemyConfigs[enemyTypeIndex].difficulty));
         }
     }
 
@@ -109,45 +112,24 @@ Generator::~Generator()
 {
     qDebug() << "Generator destructor called";
     
-    // Try clearing vectors in reverse order and with more safety
-    qDebug() << "Clearing listPotions...";
+    // Clear vectors safely without calling any external functions
+    // that might access Qt objects or global state
     try {
+        // Clear vectors in reverse order of creation for safety
         listPotions.clear();
-        qDebug() << "listPotions cleared";
-    } catch (...) {
-        qDebug() << "Exception clearing listPotions";
-    }
-    
-    qDebug() << "Clearing listArmors...";
-    try {
         listArmors.clear();
-        qDebug() << "listArmors cleared";
-    } catch (...) {
-        qDebug() << "Exception clearing listArmors";
-    }
-    
-    qDebug() << "Clearing listHelmets...";
-    try {
         listHelmets.clear();
-        qDebug() << "listHelmets cleared";
-    } catch (...) {
-        qDebug() << "Exception clearing listHelmets";
-    }
-    
-    qDebug() << "Clearing listWeapons...";
-    try {
         listWeapons.clear();
-        qDebug() << "listWeapons cleared";
-    } catch (...) {
-        qDebug() << "Exception clearing listWeapons";
-    }
-    
-    qDebug() << "Clearing listEnemies...";
-    try {
         listEnemies.clear();
-        qDebug() << "listEnemies cleared";
+        
+        // Force memory barrier to ensure all clears are complete
+        std::atomic_thread_fence(std::memory_order_seq_cst);
+        
+        qDebug() << "Generator vectors cleared successfully";
+    } catch (const std::exception& e) {
+        qDebug() << "Standard exception during Generator cleanup:" << e.what();
     } catch (...) {
-        qDebug() << "Exception clearing listEnemies";
+        qDebug() << "Unknown exception during Generator cleanup - continuing";
     }
     
     qDebug() << "Generator destructor completed";

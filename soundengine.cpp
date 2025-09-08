@@ -73,41 +73,53 @@ void SoundEngine::cleanupSoundPlayers()
 
 void SoundEngine::PlaySoundByName(std::string name, float vol)
 {
-    QString soundName = QString::fromStdString(name);
-    
-    if (soundPlayers.contains(soundName)) {
-        QMediaPlayer* player = soundPlayers[soundName];
-        if (player) {
-            player->setPosition(0);
-            player->play();
-        }
-    } else {
-        // Fallback to old method for sounds not in pre-loaded list
-        QString file = QString::fromStdString("qrc:/Sounds/" + name + ".wav");
-        QMediaPlayer *Player = new QMediaPlayer();
-        QAudioOutput *AudioOutput = new QAudioOutput;
-        Player->setAudioOutput(AudioOutput);
-        AudioOutput->setVolume(vol * sfxVolume * masterVolume);
-        Player->setSource(QUrl(file));
-        Player->play();
+    try {
+        QString soundName = QString::fromStdString(name);
         
-        // Auto-cleanup after playing
-        QTimer::singleShot(5000, [Player, AudioOutput]() {
-            Player->stop();
-            delete AudioOutput;
-            delete Player;
-        });
+        if (soundPlayers.contains(soundName)) {
+            QMediaPlayer* player = soundPlayers[soundName];
+            if (player) {
+                player->setPosition(0);
+                player->play();
+            }
+        } else {
+            // Fallback to old method for sounds not in pre-loaded list
+            QString file = QString::fromStdString("qrc:/Sounds/" + name + ".wav");
+            QMediaPlayer *Player = new QMediaPlayer();
+            QAudioOutput *AudioOutput = new QAudioOutput;
+            Player->setAudioOutput(AudioOutput);
+            AudioOutput->setVolume(vol * sfxVolume * masterVolume);
+            Player->setSource(QUrl(file));
+            Player->play();
+            
+            // Auto-cleanup after playing
+            QTimer::singleShot(5000, [Player, AudioOutput]() {
+                try {
+                    Player->stop();
+                    delete AudioOutput;
+                    delete Player;
+                } catch (...) {
+                    qDebug() << "Exception during sound cleanup";
+                }
+            });
+        }
+    } catch (...) {
+        qDebug() << "Exception in PlaySoundByName:" << QString::fromStdString(name);
     }
 }
 
 void SoundEngine::PlayMusicByName(std::string name, float vol)
 {
-    if (!musicPlayer) return;
-    
-    QString file = QString::fromStdString("qrc:/Sounds/" + name + ".wav");
-    musicPlayer->setSource(QUrl(file));
-    musicPlayer->audioOutput()->setVolume(vol * musicVolume * masterVolume);
-    musicPlayer->play();
+    try {
+        if (!musicPlayer) return;
+        
+        QString file = QString::fromStdString("qrc:/Sounds/" + name + ".wav");
+        musicPlayer->setSource(QUrl(file));
+        musicPlayer->audioOutput()->setVolume(vol * musicVolume * masterVolume);
+        musicPlayer->play();
+    } catch (...) {
+        qDebug() << "Exception in PlayMusicByName:" << QString::fromStdString(name);
+    }
 }
 
 void SoundEngine::StopMusic()

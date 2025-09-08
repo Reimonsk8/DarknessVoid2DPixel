@@ -43,4 +43,7 @@ class MainWindow;
 // Global log function for styled logging
 void addStyledLogEntry(const QString& text, bool isCurrentCommand = false);
 
+// Global scoring function for enemy defeats
+void notifyEnemyDefeated(const QString& enemyName, int enemyDifficulty);
+
 #endif //COMMON_H

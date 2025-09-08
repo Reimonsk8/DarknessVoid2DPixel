@@ -8,8 +8,6 @@
 #include <QTextEdit>
 #include <QToolButton>
 #include <QLabel>
-#include <QJsonObject>
-#include <QJsonArray>
 #include "Graphics.h"
 #include "Generator.h"
 #include "soundengine.h"
@@ -38,36 +36,30 @@ public:
     void addLogEntry(const QString& text, bool isCurrentCommand = false);
     void updateLogDisplay();
     
-    // Auto-save system
-    void enableAutoSave(bool enabled = true);
-    void performAutoSave();
-    void setAutoSaveInterval(int minutes);
     
     // Settings menu
     void showSettingsMenu();
     void applySettings();
     void showHelpMenu();
     
-    // UI improvements
-    void updateStatusBar();
+    // Scoring system
+    void onEnemyDefeated(const QString& enemyName, int enemyDifficulty);
+    void updateScoreDisplay();
     
     // Quick action hotkeys
     void toggleInventory();
-    void quickSave();
-    void quickLoad();
     void toggleMusic();
+    void updateStatusBar();
+    void updateControlsDisplay(bool hasPotions, const QString& potionKeys);
+    
     
     // Game state management
     void resetGameState();
     void cleanupGameObjects();
+    
+    // UI theming
+    void applyDarkTheme();
 
-    void read(const QJsonObject &json);
-    void write(QJsonObject &json) const;
-
-    enum SaveFormat {
-        Json, 
-        Binary
-    };
 
 protected:
 
@@ -75,10 +67,9 @@ protected:
 
 private slots:
 
-    void newFileDialog();
+    void startGame();
+    void selectDifficulty();
     void loadMapFile(int mode = 1);
-    bool loadFileDialog(SaveFormat saveFormat=Json);
-    bool saveFileDialog(SaveFormat saveFormat=Json) const;
     void exitDialog();
     void configControllersDialog();
     void changeFilePath();
@@ -113,14 +104,6 @@ private:
     QToolButton *mPotion3;
     QToolButton *mPotion4;
     QToolButton *mPotion5;
-    QLabel *mWeaponLabel;
-    QLabel *mHelmetLabel;
-    QLabel *mArmorLabel;
-    QLabel *mPotion1Label;
-    QLabel *mPotion2Label;
-    QLabel *mPotion3Label;
-    QLabel *mPotion4Label;
-    QLabel *mPotion5Label;
 
     // Button key bindings - initialized in constructor
     int mButtonAtack;
@@ -138,12 +121,12 @@ private:
     QStringList mLogEntries;
     int mCurrentCommandIndex;
     
-    // Auto-save variables
-    QTimer* autoSaveTimer;
-    bool autoSaveEnabled;
-    int autoSaveIntervalMinutes;
     
-    // Settings variables
+    // Game scoring variables
+    int enemiesDefeated;
+    int totalScore;
+    
+    // Audio settings
     float masterVolume;
     float musicVolume;
     float sfxVolume;
@@ -152,9 +135,9 @@ private:
     
     // UI elements
     QStatusBar* statusBar;
-    QLabel* healthLabel;
-    QLabel* positionLabel;
-    QLabel* autoSaveLabel;
+    QLabel* controlsLabel;
+    QLabel* scoreLabel;
+    QTextEdit* mScrollLog;
 
     // Image resources
     QString mWeaponicon;
